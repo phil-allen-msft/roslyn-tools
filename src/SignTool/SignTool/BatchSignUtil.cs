@@ -10,7 +10,7 @@ using System.IO;
 using System.IO.Compression;
 using System.IO.Packaging;
 using System.Linq;
-using Newtonsoft.Json;
+using System.Text.Json;
 using SignTool.Json;
 using static SignTool.PathUtil;
 
@@ -93,7 +93,7 @@ namespace SignTool
 
             using (StreamWriter file = File.CreateText(outputPath))
             {
-                file.Write(JsonConvert.SerializeObject(fileJsonWithInfo, Formatting.Indented));
+                file.Write(JsonSerializer.Serialize(fileJsonWithInfo, new JsonSerializerOptions { WriteIndented = true }));
             }
 
             return true;

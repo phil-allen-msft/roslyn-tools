@@ -2,8 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the License.txt file in the project root for more information.
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace SignTool.Json.Tests
@@ -42,12 +42,12 @@ namespace SignTool.Json.Tests
                 ExcludeList = new[] { "excluded.dll" }
             };
 
-            var json = JsonConvert.SerializeObject(obj, Formatting.Indented);
+            var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true });
             Assert.NotNull(json);
             Assert.NotEmpty(json);
 
             // Verify it parses back as valid JSON
-            var parsed = JObject.Parse(json);
+            var parsed = JsonNode.Parse(json);
             Assert.NotNull(parsed);
         }
 
@@ -55,9 +55,9 @@ namespace SignTool.Json.Tests
         public void OrchestratedFileJson_Serialize_KindPropertyName()
         {
             var obj = new OrchestratedFileJson { Kind = "orchestration", SignList = new OrchestratedFileSignData[0] };
-            var json = JsonConvert.SerializeObject(obj);
-            var parsed = JObject.Parse(json);
-            Assert.Equal("orchestration", parsed["kind"]?.Value<string>());
+            var json = JsonSerializer.Serialize(obj);
+            var parsed = JsonNode.Parse(json);
+            Assert.Equal("orchestration", (string?)parsed?["kind"]);
         }
 
         [Fact]
@@ -74,10 +74,10 @@ namespace SignTool.Json.Tests
                     }
                 }
             };
-            var json = JsonConvert.SerializeObject(obj);
-            var parsed = JObject.Parse(json);
-            Assert.NotNull(parsed["sign"]);
-            Assert.True(parsed["sign"] is JArray);
+            var json = JsonSerializer.Serialize(obj);
+            var parsed = JsonNode.Parse(json);
+            Assert.NotNull(parsed?["sign"]);
+            Assert.IsType<JsonArray>(parsed["sign"]);
         }
 
         [Fact]
@@ -88,63 +88,63 @@ namespace SignTool.Json.Tests
                 SignList = new OrchestratedFileSignData[0],
                 ExcludeList = new[] { "ext.dll" }
             };
-            var json = JsonConvert.SerializeObject(obj);
-            var parsed = JObject.Parse(json);
-            Assert.NotNull(parsed["exclude"]);
+            var json = JsonSerializer.Serialize(obj);
+            var parsed = JsonNode.Parse(json);
+            Assert.NotNull(parsed?["exclude"]);
         }
 
         [Fact]
         public void OrchestratedFileSignData_Serialize_CertificatePropertyName()
         {
             var obj = new OrchestratedFileSignData { Certificate = "TestCert", FileList = new FileSignDataEntry[0] };
-            var json = JsonConvert.SerializeObject(obj);
-            var parsed = JObject.Parse(json);
-            Assert.Equal("TestCert", parsed["certificate"]?.Value<string>());
+            var json = JsonSerializer.Serialize(obj);
+            var parsed = JsonNode.Parse(json);
+            Assert.Equal("TestCert", (string?)parsed?["certificate"]);
         }
 
         [Fact]
         public void OrchestratedFileSignData_Serialize_StrongNamePropertyName()
         {
             var obj = new OrchestratedFileSignData { StrongName = "MySN", FileList = new FileSignDataEntry[0] };
-            var json = JsonConvert.SerializeObject(obj);
-            var parsed = JObject.Parse(json);
-            Assert.Equal("MySN", parsed["strongName"]?.Value<string>());
+            var json = JsonSerializer.Serialize(obj);
+            var parsed = JsonNode.Parse(json);
+            Assert.Equal("MySN", (string?)parsed?["strongName"]);
         }
 
         [Fact]
         public void OrchestratedFileSignData_Serialize_ValuesPropertyName()
         {
             var obj = new OrchestratedFileSignData { FileList = new FileSignDataEntry[0] };
-            var json = JsonConvert.SerializeObject(obj);
-            var parsed = JObject.Parse(json);
-            Assert.NotNull(parsed["values"]);
+            var json = JsonSerializer.Serialize(obj);
+            var parsed = JsonNode.Parse(json);
+            Assert.NotNull(parsed?["values"]);
         }
 
         [Fact]
         public void FileSignDataEntry_Serialize_FilePathPropertyName()
         {
             var entry = new FileSignDataEntry { FilePath = "path/to/file.dll", SHA256Hash = "HASH", PublishToFeedUrl = "https://feed.example.com" };
-            var json = JsonConvert.SerializeObject(entry);
-            var parsed = JObject.Parse(json);
-            Assert.Equal("path/to/file.dll", parsed["filePath"]?.Value<string>());
+            var json = JsonSerializer.Serialize(entry);
+            var parsed = JsonNode.Parse(json);
+            Assert.Equal("path/to/file.dll", (string?)parsed?["filePath"]);
         }
 
         [Fact]
         public void FileSignDataEntry_Serialize_SHA256HashPropertyName()
         {
             var entry = new FileSignDataEntry { FilePath = "file.dll", SHA256Hash = "DEADBEEF", PublishToFeedUrl = "https://feed.example.com" };
-            var json = JsonConvert.SerializeObject(entry);
-            var parsed = JObject.Parse(json);
-            Assert.Equal("DEADBEEF", parsed["sha256Hash"]?.Value<string>());
+            var json = JsonSerializer.Serialize(entry);
+            var parsed = JsonNode.Parse(json);
+            Assert.Equal("DEADBEEF", (string?)parsed?["sha256Hash"]);
         }
 
         [Fact]
         public void FileSignDataEntry_Serialize_PublishToFeedUrlPropertyName()
         {
             var entry = new FileSignDataEntry { FilePath = "file.dll", SHA256Hash = "HASH", PublishToFeedUrl = "https://myfeed.com" };
-            var json = JsonConvert.SerializeObject(entry);
-            var parsed = JObject.Parse(json);
-            Assert.Equal("https://myfeed.com", parsed["publishtofeedurl"]?.Value<string>());
+            var json = JsonSerializer.Serialize(entry);
+            var parsed = JsonNode.Parse(json);
+            Assert.Equal("https://myfeed.com", (string?)parsed?["publishtofeedurl"]);
         }
 
         #endregion
@@ -159,8 +159,8 @@ namespace SignTool.Json.Tests
                 Kind = "orchestration",
                 SignList = new OrchestratedFileSignData[0]
             };
-            var json = JsonConvert.SerializeObject(original, Formatting.Indented);
-            var deserialized = JsonConvert.DeserializeObject<OrchestratedFileJson>(json);
+            var json = JsonSerializer.Serialize(original, new JsonSerializerOptions { WriteIndented = true });
+            var deserialized = JsonSerializer.Deserialize<OrchestratedFileJson>(json);
             Assert.Equal(original.Kind, deserialized.Kind);
         }
 
@@ -187,8 +187,8 @@ namespace SignTool.Json.Tests
                     }
                 }
             };
-            var json = JsonConvert.SerializeObject(original, Formatting.Indented);
-            var deserialized = JsonConvert.DeserializeObject<OrchestratedFileJson>(json);
+            var json = JsonSerializer.Serialize(original, new JsonSerializerOptions { WriteIndented = true });
+            var deserialized = JsonSerializer.Deserialize<OrchestratedFileJson>(json);
 
             Assert.Single(deserialized.SignList);
             Assert.Equal("RoundTripCert", deserialized.SignList[0].Certificate);
@@ -207,8 +207,8 @@ namespace SignTool.Json.Tests
                 SignList = new OrchestratedFileSignData[0],
                 ExcludeList = new[] { "excluded1.dll", "excluded2.dll" }
             };
-            var json = JsonConvert.SerializeObject(original, Formatting.Indented);
-            var deserialized = JsonConvert.DeserializeObject<OrchestratedFileJson>(json);
+            var json = JsonSerializer.Serialize(original, new JsonSerializerOptions { WriteIndented = true });
+            var deserialized = JsonSerializer.Deserialize<OrchestratedFileJson>(json);
             Assert.Equal(original.ExcludeList, deserialized.ExcludeList);
         }
 
@@ -230,8 +230,8 @@ namespace SignTool.Json.Tests
                 },
                 ExcludeList = new[] { "skip.dll" }
             };
-            var json = JsonConvert.SerializeObject(original, Formatting.Indented);
-            var deserialized = JsonConvert.DeserializeObject<FileJson>(json);
+            var json = JsonSerializer.Serialize(original, new JsonSerializerOptions { WriteIndented = true });
+            var deserialized = JsonSerializer.Deserialize<FileJson>(json);
 
             Assert.Equal(original.Kind, deserialized.Kind);
             Assert.Equal(original.PublishUrl, deserialized.PublishUrl);

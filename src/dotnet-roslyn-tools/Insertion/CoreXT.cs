@@ -6,8 +6,8 @@ using System.Xml.Linq;
 using System.Xml.XPath;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
 using Microsoft.VisualStudio.Services.Common;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using NuGet.Versioning;
 
 namespace Microsoft.RoslynTools.Insertion;
@@ -15,7 +15,7 @@ namespace Microsoft.RoslynTools.Insertion;
 internal sealed class CoreXT
 {
     private static Dictionary<string, string> s_componentToFileMap = null!;
-    private static Dictionary<string, (string original, JObject document)> s_componentFileToDocumentMap = null!;
+    private static Dictionary<string, (string original, JsonNode document)> s_componentFileToDocumentMap = null!;
     private static HashSet<string> s_dirtyComponentFiles = null!;
 
     /// <summary>
@@ -70,7 +70,7 @@ internal sealed class CoreXT
         }
 
         s_componentToFileMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        s_componentFileToDocumentMap = new Dictionary<string, (string, JObject)>(StringComparer.OrdinalIgnoreCase);
+        s_componentFileToDocumentMap = new Dictionary<string, (string, JsonNode)>(StringComparer.OrdinalIgnoreCase);
         s_dirtyComponentFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         s_packageToPropFilesMap = new Dictionary<string, ICollection<string>>(StringComparer.OrdinalIgnoreCase);
@@ -131,7 +131,7 @@ internal sealed class CoreXT
                 }
 
                 // Preserve trailing newline if present
-                var newText = doc.ToString(Formatting.Indented) + (original.EndsWith('\n') ? "\n" : "");
+                var newText = doc.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + (original.EndsWith('\n') ? "\n" : "");
                 if (RoslynInsertionTool.GetChangeOpt(kvp.Key, original, newText) is GitChange change)
                 {
                     changes.Add(change);
@@ -283,15 +283,15 @@ internal sealed class CoreXT
             return false;
         }
 
-        var componentFilename = componentJSON.Value<string>("fileName");
-        var componentUrl = componentJSON.Value<string>("url");
+        var componentFilename = (string?)componentJSON["fileName"];
+        var componentUrl = (string?)componentJSON["url"];
         if (string.IsNullOrEmpty(componentFilename) || string.IsNullOrEmpty(componentUrl))
         {
             return false;
         }
 
         var componentUri = new Uri(componentUrl);
-        var version = componentJSON.Value<string>("version") ?? string.Empty; // might not be present
+        var version = (string?)componentJSON["version"] ?? string.Empty; // might not be present
         component = new Component(componentName, componentFilename, componentUri, version);
         return true;
     }
@@ -305,7 +305,7 @@ internal sealed class CoreXT
             return;
         }
 
-        var componentJSON = (JObject?)componentDocument["Components"]?[component.Name];
+        var componentJSON = componentDocument["Components"]?[component.Name]?.AsObject();
         if (componentJSON is null)
         {
             return;
@@ -317,8 +317,7 @@ internal sealed class CoreXT
         if (component.Version == null)
         {
             // ensure no 'version' property is set in the JSON
-            var versionProperty = componentJSON.Property("version");
-            versionProperty?.Remove();
+            componentJSON.Remove("version");
         }
         else
         {
@@ -344,7 +343,7 @@ internal sealed class CoreXT
             var imports = mainComponentsJsonDocument["Imports"];
             if (imports != null)
             {
-                foreach (var import in imports)
+            foreach (var import in imports.AsArray())
                 {
                     var subComponentFileName = (string?)import;
 
@@ -364,31 +363,26 @@ internal sealed class CoreXT
         }
     }
 
-    private static void PopulateComponentToFileMapForFile(JObject jDocument, string componentsJsonFileName)
+    private static void PopulateComponentToFileMapForFile(JsonNode jDocument, string componentsJsonFileName)
     {
         if (jDocument != null && !string.IsNullOrEmpty(componentsJsonFileName))
         {
-            var jComponents = (JObject?)jDocument["Components"];
+            var jComponents = jDocument["Components"]?.AsObject();
 
-            if (jComponents != null)
+            if (jComponents != null && jComponents.Count != 0)
             {
-                var componentsMap = jComponents.ToObject<Dictionary<string, JToken>>();
-
-                if (componentsMap != null && componentsMap.Count != 0)
+                foreach (var kvp in jComponents)
                 {
-                    foreach (var kvp in componentsMap)
+                    if (!s_componentToFileMap.ContainsKey(kvp.Key))
                     {
-                        if (!s_componentToFileMap.ContainsKey(kvp.Key))
-                        {
-                            s_componentToFileMap[kvp.Key] = componentsJsonFileName;
-                        }
+                        s_componentToFileMap[kvp.Key] = componentsJsonFileName;
                     }
                 }
             }
         }
     }
 
-    private static async Task<(string original, JObject document)> GetJsonDocumentForComponentsFile(
+    private static async Task<(string original, JsonNode document)> GetJsonDocumentForComponentsFile(
         GitHttpClient gitClient,
         string commitId,
         string componentsJSONPath)
@@ -398,7 +392,7 @@ internal sealed class CoreXT
         {
             using var fileStream = await gitClient.GetItemContentAsync(RoslynInsertionTool.VSRepoId, path: componentsJSONPath, versionDescriptor: versionDescriptor);
             var original = await new StreamReader(fileStream).ReadToEndAsync();
-            var jsonDocument = (JObject)JToken.Parse(original);
+            var jsonDocument = JsonNode.Parse(original);
             return (original, jsonDocument);
         }
         catch (Exception e)
@@ -407,9 +401,9 @@ internal sealed class CoreXT
         }
     }
 
-    private static (string? original, JObject? document) GetJsonDocumentForComponent(string componentName)
+    private static (string? original, JsonNode? document) GetJsonDocumentForComponent(string componentName)
     {
-        (string?, JObject?) pair = (null, null);
+        (string?, JsonNode?) pair = (null, null);
 
         if (!string.IsNullOrEmpty(componentName))
         {

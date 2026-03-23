@@ -9,8 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using roslyn.optprof.json;
 using roslyn.optprof.lib;
 
@@ -112,8 +111,8 @@ namespace roslyn.optprof.runsettings.generator
         {
             try
             {
-                var jsonContent = JToken.Parse(bootstrapperInfoJson);
-                var dropUrl = (string)((JArray)jsonContent).First["BuildDrop"];
+                var jsonContent = JsonNode.Parse(bootstrapperInfoJson);
+                var dropUrl = jsonContent.AsArray()[0]["BuildDrop"].GetValue<string>();
 
                 const string prefix = "https://vsdrop.corp.microsoft.com/file/v1/Products/";
                 if (!dropUrl.StartsWith(prefix, StringComparison.Ordinal))

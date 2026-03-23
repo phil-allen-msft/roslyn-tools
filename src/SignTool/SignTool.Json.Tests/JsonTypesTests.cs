@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the License.txt file in the project root for more information.
 
-using Newtonsoft.Json;
+using System.Text.Json;
 using Xunit;
 
 namespace SignTool.Json.Tests
@@ -18,7 +18,7 @@ namespace SignTool.Json.Tests
         public void FileJson_Deserialize_KindProperty()
         {
             var json = @"{ ""kind"": ""default"", ""sign"": [] }";
-            var result = JsonConvert.DeserializeObject<FileJson>(json);
+            var result = JsonSerializer.Deserialize<FileJson>(json);
             Assert.Equal("default", result.Kind);
         }
 
@@ -26,7 +26,7 @@ namespace SignTool.Json.Tests
         public void FileJson_Deserialize_PublishUrlProperty()
         {
             var json = @"{ ""publishUrl"": ""https://example.com/feed"", ""sign"": [] }";
-            var result = JsonConvert.DeserializeObject<FileJson>(json);
+            var result = JsonSerializer.Deserialize<FileJson>(json);
             Assert.Equal("https://example.com/feed", result.PublishUrl);
         }
 
@@ -43,7 +43,7 @@ namespace SignTool.Json.Tests
     }
   ]
 }";
-            var result = JsonConvert.DeserializeObject<FileJson>(json);
+            var result = JsonSerializer.Deserialize<FileJson>(json);
             Assert.Single(result.SignList);
             Assert.Equal("MyCert", result.SignList[0].Certificate);
             Assert.Equal("MySN", result.SignList[0].StrongName);
@@ -60,7 +60,7 @@ namespace SignTool.Json.Tests
     { ""certificate"": ""Cert2"", ""strongName"": null, ""values"": [ ""b.msi"" ] }
   ]
 }";
-            var result = JsonConvert.DeserializeObject<FileJson>(json);
+            var result = JsonSerializer.Deserialize<FileJson>(json);
             Assert.Equal(2, result.SignList.Length);
         }
 
@@ -72,7 +72,7 @@ namespace SignTool.Json.Tests
   ""sign"": [],
   ""exclude"": [ ""skip1.dll"", ""skip2.dll"" ]
 }";
-            var result = JsonConvert.DeserializeObject<FileJson>(json);
+            var result = JsonSerializer.Deserialize<FileJson>(json);
             Assert.Equal(new[] { "skip1.dll", "skip2.dll" }, result.ExcludeList);
         }
 
@@ -80,7 +80,7 @@ namespace SignTool.Json.Tests
         public void FileJson_Deserialize_NullExcludeList_WhenMissing()
         {
             var json = @"{ ""sign"": [] }";
-            var result = JsonConvert.DeserializeObject<FileJson>(json);
+            var result = JsonSerializer.Deserialize<FileJson>(json);
             Assert.Null(result.ExcludeList);
         }
 
@@ -88,7 +88,7 @@ namespace SignTool.Json.Tests
         public void FileJson_Deserialize_NullPublishUrl_WhenMissing()
         {
             var json = @"{ ""sign"": [] }";
-            var result = JsonConvert.DeserializeObject<FileJson>(json);
+            var result = JsonSerializer.Deserialize<FileJson>(json);
             Assert.Null(result.PublishUrl);
         }
 
@@ -100,7 +100,7 @@ namespace SignTool.Json.Tests
         public void FileSignData_Deserialize_CertificateProperty()
         {
             var json = @"{ ""certificate"": ""MyCertificate"", ""strongName"": null, ""values"": [] }";
-            var result = JsonConvert.DeserializeObject<FileSignData>(json);
+            var result = JsonSerializer.Deserialize<FileSignData>(json);
             Assert.Equal("MyCertificate", result.Certificate);
         }
 
@@ -108,7 +108,7 @@ namespace SignTool.Json.Tests
         public void FileSignData_Deserialize_StrongNameProperty()
         {
             var json = @"{ ""certificate"": ""MyCert"", ""strongName"": ""MyStrongName"", ""values"": [] }";
-            var result = JsonConvert.DeserializeObject<FileSignData>(json);
+            var result = JsonSerializer.Deserialize<FileSignData>(json);
             Assert.Equal("MyStrongName", result.StrongName);
         }
 
@@ -116,7 +116,7 @@ namespace SignTool.Json.Tests
         public void FileSignData_Deserialize_NullStrongName()
         {
             var json = @"{ ""certificate"": ""MyCert"", ""strongName"": null, ""values"": [] }";
-            var result = JsonConvert.DeserializeObject<FileSignData>(json);
+            var result = JsonSerializer.Deserialize<FileSignData>(json);
             Assert.Null(result.StrongName);
         }
 
@@ -124,7 +124,7 @@ namespace SignTool.Json.Tests
         public void FileSignData_Deserialize_ValuesAsFileList()
         {
             var json = @"{ ""certificate"": ""Cert"", ""strongName"": null, ""values"": [ ""one.dll"", ""two.dll"", ""three.dll"" ] }";
-            var result = JsonConvert.DeserializeObject<FileSignData>(json);
+            var result = JsonSerializer.Deserialize<FileSignData>(json);
             Assert.Equal(new[] { "one.dll", "two.dll", "three.dll" }, result.FileList);
         }
 
@@ -136,7 +136,7 @@ namespace SignTool.Json.Tests
         public void OrchestratedFileJson_Deserialize_KindProperty()
         {
             var json = @"{ ""kind"": ""orchestration"", ""sign"": [] }";
-            var result = JsonConvert.DeserializeObject<OrchestratedFileJson>(json);
+            var result = JsonSerializer.Deserialize<OrchestratedFileJson>(json);
             Assert.Equal("orchestration", result.Kind);
         }
 
@@ -159,7 +159,7 @@ namespace SignTool.Json.Tests
     }
   ]
 }";
-            var result = JsonConvert.DeserializeObject<OrchestratedFileJson>(json);
+            var result = JsonSerializer.Deserialize<OrchestratedFileJson>(json);
             Assert.Single(result.SignList);
             Assert.Equal("MyCert", result.SignList[0].Certificate);
             Assert.Single(result.SignList[0].FileList);
@@ -173,7 +173,7 @@ namespace SignTool.Json.Tests
   ""sign"": [],
   ""exclude"": [ ""external1.dll"", ""external2.dll"" ]
 }";
-            var result = JsonConvert.DeserializeObject<OrchestratedFileJson>(json);
+            var result = JsonSerializer.Deserialize<OrchestratedFileJson>(json);
             Assert.Equal(new[] { "external1.dll", "external2.dll" }, result.ExcludeList);
         }
 
@@ -190,7 +190,7 @@ namespace SignTool.Json.Tests
   ""strongName"": ""OrchestratedSN"",
   ""values"": []
 }";
-            var result = JsonConvert.DeserializeObject<OrchestratedFileSignData>(json);
+            var result = JsonSerializer.Deserialize<OrchestratedFileSignData>(json);
             Assert.Equal("OrchestratedCert", result.Certificate);
             Assert.Equal("OrchestratedSN", result.StrongName);
         }
@@ -215,7 +215,7 @@ namespace SignTool.Json.Tests
     }
   ]
 }";
-            var result = JsonConvert.DeserializeObject<OrchestratedFileSignData>(json);
+            var result = JsonSerializer.Deserialize<OrchestratedFileSignData>(json);
             Assert.Equal(2, result.FileList.Length);
         }
 
@@ -227,7 +227,7 @@ namespace SignTool.Json.Tests
         public void FileSignDataEntry_Deserialize_FilePathProperty()
         {
             var json = @"{ ""filePath"": ""relative/path/file.dll"", ""sha256Hash"": ""AABB"", ""publishtofeedurl"": ""https://example.com"" }";
-            var result = JsonConvert.DeserializeObject<FileSignDataEntry>(json);
+            var result = JsonSerializer.Deserialize<FileSignDataEntry>(json);
             Assert.Equal("relative/path/file.dll", result.FilePath);
         }
 
@@ -235,7 +235,7 @@ namespace SignTool.Json.Tests
         public void FileSignDataEntry_Deserialize_SHA256HashProperty()
         {
             var json = @"{ ""filePath"": ""file.dll"", ""sha256Hash"": ""DEADBEEFCAFE0123"", ""publishtofeedurl"": ""https://example.com"" }";
-            var result = JsonConvert.DeserializeObject<FileSignDataEntry>(json);
+            var result = JsonSerializer.Deserialize<FileSignDataEntry>(json);
             Assert.Equal("DEADBEEFCAFE0123", result.SHA256Hash);
         }
 
@@ -243,7 +243,7 @@ namespace SignTool.Json.Tests
         public void FileSignDataEntry_Deserialize_PublishToFeedUrlProperty()
         {
             var json = @"{ ""filePath"": ""file.dll"", ""sha256Hash"": ""AABB"", ""publishtofeedurl"": ""https://myfeed.example.com/package"" }";
-            var result = JsonConvert.DeserializeObject<FileSignDataEntry>(json);
+            var result = JsonSerializer.Deserialize<FileSignDataEntry>(json);
             Assert.Equal("https://myfeed.example.com/package", result.PublishToFeedUrl);
         }
 
@@ -251,7 +251,7 @@ namespace SignTool.Json.Tests
         public void FileSignDataEntry_Deserialize_NullSHA256Hash_WhenMissing()
         {
             var json = @"{ ""filePath"": ""file.dll"", ""publishtofeedurl"": ""https://example.com"" }";
-            var result = JsonConvert.DeserializeObject<FileSignDataEntry>(json);
+            var result = JsonSerializer.Deserialize<FileSignDataEntry>(json);
             Assert.Null(result.SHA256Hash);
         }
 

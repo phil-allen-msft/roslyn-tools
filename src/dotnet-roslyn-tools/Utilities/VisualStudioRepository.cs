@@ -4,7 +4,7 @@
 
 using System.Xml.Linq;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 namespace Microsoft.RoslynTools.Utilities;
 
@@ -36,9 +36,9 @@ internal static class VisualStudioRepository
     public static async Task<string?> GetUrlFromComponentJsonFileAsync(string gitVersion, GitVersionType versionType, AzDOConnection devdiv, string jsonFile, string componentName)
     {
         var fileContents = await GetFileContentsAsync(gitVersion, versionType, devdiv, jsonFile);
-        var componentsJson = JObject.Parse(fileContents);
+        var componentsJson = JsonNode.Parse(fileContents);
 
-        var url = componentsJson["Components"]?[componentName]?["url"]?.ToString();
+        var url = componentsJson?["Components"]?[componentName]?["url"]?.ToString();
         return url;
     }
 

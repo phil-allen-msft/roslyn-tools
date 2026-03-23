@@ -5,7 +5,7 @@
     <TargetFramework>$(NetFrameworkToolCurrent)</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="$(NewtonsoftJsonVersion)" />
+    <PackageReference Include="System.Text.Json" Version="$(SystemTextJsonVersion)" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SignTool\SignTool.csproj" />

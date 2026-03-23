@@ -20,7 +20,8 @@ using Microsoft.TeamFoundation.Policy.WebApi;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
 using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Services.WebApi;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Task = System.Threading.Tasks.Task;
 
 namespace Roslyn.Insertion
@@ -460,27 +461,7 @@ namespace Roslyn.Insertion
             var fileName = Path.GetFileName(filePath);
             var manifestJson = File.ReadAllText(filePath);
 
-            var manifest = JsonConvert.DeserializeAnonymousType(manifestJson, new
-            {
-                info = new
-                {
-                    manifestName = "",
-                    buildVersion = ""
-                },
-                packages = new[]
-                {
-                new
-                {
-                    payloads = new[]
-                    {
-                        new
-                        {
-                            url = ""
-                        }
-                    }
-                }
-            }
-            });
+            var manifest = JsonSerializer.Deserialize<ManifestInfo>(manifestJson);
 
             // Find the first package payload where the url is in the expected format `http://{drop url};{filename}`
             var payload = manifest?.packages
@@ -562,31 +543,7 @@ namespace Roslyn.Insertion
             var content = await response.Content.ReadAsStringAsync();
 
             // https://developer.github.com/v3/repos/commits/
-            var data = JsonConvert.DeserializeAnonymousType(content, new
-            {
-                commits = new[]
-                {
-                        new
-                        {
-                            sha = "",
-                            commit = new
-                            {
-                                author = new
-                                {
-                                    name = "",
-                                    email = "",
-                                    date = ""
-                                },
-                                committer = new
-                                {
-                                    name = ""
-                                },
-                                message = ""
-                            },
-                            html_url = ""
-                        }
-                    }
-            });
+            var data = JsonSerializer.Deserialize<GitHubCompareResponse>(content);
 
             var result = data.commits
                 .Select(d =>
@@ -867,6 +824,59 @@ namespace Roslyn.Insertion
             public string Message { get; set; }
             public string CommitId { get; set; }
             public string RemoteUrl { get; set; }
+        }
+
+        private sealed class ManifestInfo
+        {
+            public ManifestInfoData info { get; set; }
+            public ManifestPackage[] packages { get; set; }
+        }
+
+        private sealed class ManifestInfoData
+        {
+            public string manifestName { get; set; }
+            public string buildVersion { get; set; }
+        }
+
+        private sealed class ManifestPackage
+        {
+            public ManifestPayload[] payloads { get; set; }
+        }
+
+        private sealed class ManifestPayload
+        {
+            public string url { get; set; }
+        }
+
+        private sealed class GitHubCompareResponse
+        {
+            public GitHubCommit[] commits { get; set; }
+        }
+
+        private sealed class GitHubCommit
+        {
+            public string sha { get; set; }
+            public GitHubCommitData commit { get; set; }
+            public string html_url { get; set; }
+        }
+
+        private sealed class GitHubCommitData
+        {
+            public GitHubAuthor author { get; set; }
+            public GitHubCommitter committer { get; set; }
+            public string message { get; set; }
+        }
+
+        private sealed class GitHubAuthor
+        {
+            public string name { get; set; }
+            public string email { get; set; }
+            public string date { get; set; }
+        }
+
+        private sealed class GitHubCommitter
+        {
+            public string name { get; set; }
         }
     }
 }

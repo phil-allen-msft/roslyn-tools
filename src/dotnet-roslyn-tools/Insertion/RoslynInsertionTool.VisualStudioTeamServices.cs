@@ -11,7 +11,8 @@ using Microsoft.TeamFoundation.SourceControl.WebApi;
 using Microsoft.RoslynTools.PRFinder.Hosts;
 using Microsoft.RoslynTools.Utilities;
 using Microsoft.VisualStudio.Services.WebApi;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Task = System.Threading.Tasks.Task;
 using GitCommit = Microsoft.RoslynTools.PRFinder.GitCommit;
 
@@ -499,28 +500,7 @@ internal static partial class RoslynInsertionTool
         var fileName = Path.GetFileName(filePath);
         var manifestJson = File.ReadAllText(filePath);
 
-        var manifest = JsonConvert.DeserializeAnonymousType(manifestJson,
-            new
-            {
-                info = new
-                {
-                    manifestName = "",
-                    buildVersion = ""
-                },
-                packages = new[]
-                {
-                    new
-                    {
-                        payloads = new[]
-                        {
-                            new
-                            {
-                                url = ""
-                            }
-                        }
-                    }
-                }
-            });
+        var manifest = JsonSerializer.Deserialize<ManifestFileInfo>(manifestJson);
 
         // Find the first package payload where the url is in the expected format `http://{drop url};{filename}`
         var payload = manifest?.packages
@@ -608,34 +588,9 @@ internal static partial class RoslynInsertionTool
         var content = await response.Content.ReadAsStringAsync();
 
         // https://developer.github.com/v3/repos/commits/
-        var data = JsonConvert.DeserializeAnonymousType(content,
-            new
-            {
-                commits = new[]
-                {
-                    new
-                    {
-                        sha = "",
-                        commit = new
-                        {
-                            author = new
-                            {
-                                name = "",
-                                email = "",
-                                date = ""
-                            },
-                            committer = new
-                            {
-                                name = ""
-                            },
-                            message = ""
-                        },
-                        html_url = ""
-                    }
-                }
-            });
+        var data = JsonSerializer.Deserialize<GitHubCompareData>(content);
 
-        var result = (data?.commits ?? Array.Empty<dynamic>())
+        var result = (data?.commits ?? Array.Empty<GitHubCommitEntry>())
             .Select(d =>
                 new GitCommit()
                 {
@@ -724,4 +679,57 @@ internal static partial class RoslynInsertionTool
 
     public static string GetGitHubPullRequestUrl(string repoURL, string prNumber)
         => PRFinder.Hosts.GitHub.GetPullRequestUrl(repoURL, prNumber);
+
+    private sealed class ManifestFileInfo
+    {
+        public ManifestFileInfoData? info { get; set; }
+        public ManifestFilePackage[] packages { get; set; } = Array.Empty<ManifestFilePackage>();
+    }
+
+    private sealed class ManifestFileInfoData
+    {
+        public string manifestName { get; set; } = "";
+        public string buildVersion { get; set; } = "";
+    }
+
+    private sealed class ManifestFilePackage
+    {
+        public ManifestFilePayload[] payloads { get; set; } = Array.Empty<ManifestFilePayload>();
+    }
+
+    private sealed class ManifestFilePayload
+    {
+        public string url { get; set; } = "";
+    }
+
+    private sealed class GitHubCompareData
+    {
+        public GitHubCommitEntry[] commits { get; set; } = Array.Empty<GitHubCommitEntry>();
+    }
+
+    private sealed class GitHubCommitEntry
+    {
+        public string sha { get; set; } = "";
+        public GitHubCommitEntryData commit { get; set; } = new();
+        public string html_url { get; set; } = "";
+    }
+
+    private sealed class GitHubCommitEntryData
+    {
+        public GitHubCommitAuthor author { get; set; } = new();
+        public GitHubCommitCommitter committer { get; set; } = new();
+        public string message { get; set; } = "";
+    }
+
+    private sealed class GitHubCommitAuthor
+    {
+        public string name { get; set; } = "";
+        public string email { get; set; } = "";
+        public string date { get; set; } = "";
+    }
+
+    private sealed class GitHubCommitCommitter
+    {
+        public string name { get; set; } = "";
+    }
 }

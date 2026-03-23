@@ -9,10 +9,9 @@ using System.IO.Packaging;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Mono.Options;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace ModifyVsixManifest
 {
@@ -103,9 +102,9 @@ namespace ModifyVsixManifest
                     jsonStr = reader.ReadToEnd();
                 }
 
-                var json = JObject.Parse(jsonStr);
+                var json = JsonNode.Parse(jsonStr).AsObject();
 
-                var file = ((JArray)json["files"]).Where(f => (string)f["fileName"] == partName).Single();
+                var file = json["files"].AsArray().Single(f => (string)f["fileName"] == partName);
                 file["sha256"] = BitConverter.ToString(partHash).Replace("-", "");
 
                 stream.Position = 0;
@@ -113,7 +112,7 @@ namespace ModifyVsixManifest
 
                 using (var writer = new StreamWriter(stream, Encoding.UTF8, bufferSize: 2048, leaveOpen: false))
                 {
-                    writer.Write(json.ToString(Formatting.None));
+                    writer.Write(json.ToJsonString());
                 }
             }
         }

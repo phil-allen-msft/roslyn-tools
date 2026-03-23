@@ -2,22 +2,22 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the License.txt file in the project root for more information.
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace SignTool.Json
 {
     internal sealed class FileJson
     {
-        [JsonProperty(PropertyName = "kind")]
+        [JsonPropertyName("kind")]
         public string Kind { get; set; }
 
-        [JsonProperty(PropertyName = "publishUrl")]
+        [JsonPropertyName("publishUrl")]
         public string PublishUrl { get; set; }
 
-        [JsonProperty(PropertyName = "sign")]
+        [JsonPropertyName("sign")]
         public FileSignData[] SignList { get; set; }
 
-        [JsonProperty(PropertyName = "exclude")]
+        [JsonPropertyName("exclude")]
         public string[] ExcludeList { get; set; }
 
         public FileJson()
@@ -28,13 +28,13 @@ namespace SignTool.Json
 
     internal sealed class OrchestratedFileJson
     {
-        [JsonProperty(PropertyName = "kind")]
+        [JsonPropertyName("kind")]
         public string Kind { get; set; }
 
-        [JsonProperty(PropertyName = "sign")]
+        [JsonPropertyName("sign")]
         public OrchestratedFileSignData[] SignList { get; set; }
 
-        [JsonProperty(PropertyName = "exclude")]
+        [JsonPropertyName("exclude")]
         public string[] ExcludeList { get; set; }
 
         public OrchestratedFileJson()
@@ -44,17 +44,17 @@ namespace SignTool.Json
 
     internal class FileSignDataBase
     {
-        [JsonProperty(PropertyName = "certificate", Order = 1)]
+        [JsonPropertyName("certificate")]
         public string Certificate { get; set; }
 
-        [JsonProperty(PropertyName = "strongName", Order = 2)]
+        [JsonPropertyName("strongName")]
         public string StrongName { get; set; }
     }
 
 
     internal sealed class FileSignData : FileSignDataBase
     {
-        [JsonProperty(PropertyName = "values", Order = 3)]
+        [JsonPropertyName("values")]
         public string[] FileList { get; set; }
 
         public FileSignData()
@@ -64,7 +64,7 @@ namespace SignTool.Json
 
     internal sealed class OrchestratedFileSignData : FileSignDataBase
     {
-        [JsonProperty(PropertyName = "values", Order = 3)]
+        [JsonPropertyName("values")]
         public FileSignDataEntry[] FileList { get; set; }
 
         public OrchestratedFileSignData()
@@ -74,13 +74,13 @@ namespace SignTool.Json
 
     internal sealed class FileSignDataEntry
     {
-        [JsonProperty(PropertyName = "filePath")]
+        [JsonPropertyName("filePath")]
         public string FilePath { get; set; }
 
-        [JsonProperty(PropertyName = "sha256Hash")]
+        [JsonPropertyName("sha256Hash")]
         public string SHA256Hash { get; set; }
 
-        [JsonProperty(PropertyName = "publishtofeedurl")]
+        [JsonPropertyName("publishtofeedurl")]
         public string PublishToFeedUrl { get; set; }
 
         public FileSignDataEntry()

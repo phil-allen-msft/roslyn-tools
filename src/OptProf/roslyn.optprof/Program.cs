@@ -9,7 +9,7 @@ using System.CommandLine.Invocation;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using roslyn.optprof.json;
 using roslyn.optprof.lib;
 
@@ -122,7 +122,7 @@ namespace roslyn.optprof
             }
         }
 
-        private static JObject GetJsonManifest(string path)
+        private static JsonObject GetJsonManifest(string path)
         {
             using (var vsix = Vsix.Create(path))
             {
@@ -153,10 +153,12 @@ namespace roslyn.optprof
 
         private static string ToJsonString((string Technology, string RelativeInstallationPath, string InstrumentationArguments) entry)
         {
-            return new JObject(
-                new JProperty("Technology", entry.Technology),
-                new JProperty("RelativeInstallationPath", entry.RelativeInstallationPath),
-                new JProperty("InstrumentationArguments", entry.InstrumentationArguments)).ToString();
+            return new JsonObject
+            {
+                ["Technology"] = entry.Technology,
+                ["RelativeInstallationPath"] = entry.RelativeInstallationPath,
+                ["InstrumentationArguments"] = entry.InstrumentationArguments
+            }.ToJsonString();
         }
     }
 }

@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.RoslynTools.Products;
 using Microsoft.RoslynTools.Utilities;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 namespace Microsoft.RoslynTools.CreateReleaseTags;
 
@@ -73,11 +73,11 @@ internal sealed partial class VsReleaseTagger(ILogger logger)
                 continue;
             }
 
-            JObject buildInformation;
+            JsonNode buildInformation;
 
             try
             {
-                buildInformation = JObject.Parse(annotatedTag.Message);
+                buildInformation = JsonNode.Parse(annotatedTag.Message);
             }
             catch
             {
