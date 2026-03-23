@@ -466,7 +466,7 @@ namespace Roslyn.Insertion
             // Find the first package payload where the url is in the expected format `http://{drop url};{filename}`
             var payload = manifest?.packages
                 .Where(package => package?.payloads is not null)
-                .SelectMany(package => package.payloads)
+                .SelectMany(package => package.Payloads)
                 .FirstOrDefault(payload => payload?.url?.Contains(";") == true);
 
             if (payload is null)
@@ -476,8 +476,8 @@ namespace Roslyn.Insertion
             }
 
             // Everything is uploaded to the same drop, so we can take the url of a package and generate the manifest url.
-            var url = new Uri($"{payload.url.Split(';')[0]};{fileName}");
-            return new Component(manifest.info.manifestName, fileName, url, manifest.info.buildVersion);
+            var url = new Uri($"{payload.Url.Split(';')[0]};{fileName}");
+            return new Component(manifest.Info.ManifestName, fileName, url, manifest.Info.BuildVersion);
         }
 
         internal static async Task<(List<GitCommit> changes, string diffLink)> GetChangesBetweenBuildsAsync(Build fromBuild, Build tobuild, CancellationToken cancellationToken)
@@ -545,16 +545,16 @@ namespace Roslyn.Insertion
             // https://developer.github.com/v3/repos/commits/
             var data = JsonSerializer.Deserialize<GitHubCompareResponse>(content);
 
-            var result = data.commits
+            var result = data.Commits
                 .Select(d =>
                     new GitCommit()
                     {
-                        Author = d.commit.author.name,
-                        Committer = d.commit.committer.name,
-                        CommitDate = DateTime.Parse(d.commit.author.date),
-                        Message = d.commit.message,
-                        CommitId = d.sha,
-                        RemoteUrl = d.html_url
+                        Author = d.Commit.Author.Name,
+                        Committer = d.Commit.Committer.Name,
+                        CommitDate = DateTime.Parse(d.Commit.Author.Date),
+                        Message = d.Commit.Message,
+                        CommitId = d.Sha,
+                        RemoteUrl = d.HtmlUrl
                     })
                 // show HEAD first, base last
                 .Reverse()
@@ -828,55 +828,72 @@ namespace Roslyn.Insertion
 
         private sealed class ManifestInfo
         {
-            public ManifestInfoData info { get; set; }
-            public ManifestPackage[] packages { get; set; }
+            [JsonPropertyName("info")]
+            public ManifestInfoData Info { get; set; }
+            [JsonPropertyName("packages")]
+            public ManifestPackage[] Packages { get; set; }
         }
 
         private sealed class ManifestInfoData
         {
-            public string manifestName { get; set; }
-            public string buildVersion { get; set; }
+            [JsonPropertyName("manifestName")]
+            public string ManifestName { get; set; }
+            [JsonPropertyName("buildVersion")]
+            public string BuildVersion { get; set; }
         }
 
         private sealed class ManifestPackage
         {
-            public ManifestPayload[] payloads { get; set; }
+            [JsonPropertyName("payloads")]
+            public ManifestPayload[] Payloads { get; set; }
         }
 
         private sealed class ManifestPayload
         {
-            public string url { get; set; }
+            [JsonPropertyName("url")]
+            public string Url { get; set; }
         }
 
         private sealed class GitHubCompareResponse
         {
-            public GitHubCommit[] commits { get; set; }
+            [JsonPropertyName("commits")]
+            public GitHubCommit[] Commits { get; set; }
         }
 
         private sealed class GitHubCommit
         {
-            public string sha { get; set; }
-            public GitHubCommitData commit { get; set; }
-            public string html_url { get; set; }
+            [JsonPropertyName("sha")]
+            public string Sha { get; set; }
+            [JsonPropertyName("commit")]
+            public GitHubCommitData Commit { get; set; }
+            [JsonPropertyName("html_url")]
+            public string HtmlUrl { get; set; }
         }
 
         private sealed class GitHubCommitData
         {
-            public GitHubAuthor author { get; set; }
-            public GitHubCommitter committer { get; set; }
-            public string message { get; set; }
+            [JsonPropertyName("author")]
+            public GitHubAuthor Author { get; set; }
+            [JsonPropertyName("committer")]
+            public GitHubCommitter Committer { get; set; }
+            [JsonPropertyName("message")]
+            public string Message { get; set; }
         }
 
         private sealed class GitHubAuthor
         {
-            public string name { get; set; }
-            public string email { get; set; }
-            public string date { get; set; }
+            [JsonPropertyName("name")]
+            public string Name { get; set; }
+            [JsonPropertyName("email")]
+            public string Email { get; set; }
+            [JsonPropertyName("date")]
+            public string Date { get; set; }
         }
 
         private sealed class GitHubCommitter
         {
-            public string name { get; set; }
+            [JsonPropertyName("name")]
+            public string Name { get; set; }
         }
     }
 }

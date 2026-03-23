@@ -70,83 +70,106 @@ namespace GithubMergeTool
 
         private class CompareResponse
         {
-            public string status { get; set; }
-            public int ahead_by { get; set; }
-            public int behind_by { get; set; }
-            public int total_commits { get; set; }
+            [JsonPropertyName("status")]
+            public string Status { get; set; }
+            [JsonPropertyName("ahead_by")]
+            public int AheadBy { get; set; }
+            [JsonPropertyName("behind_by")]
+            public int BehindBy { get; set; }
+            [JsonPropertyName("total_commits")]
+            public int TotalCommits { get; set; }
         }
 
         private class RefObject
         {
-            public string sha { get; set; }
+            [JsonPropertyName("sha")]
+            public string Sha { get; set; }
         }
 
         private class SourceBranchResponse
         {
             [JsonPropertyName("object")]
-            public RefObject @object { get; set; }
+            public RefObject Object { get; set; }
         }
 
         private class PrHead
         {
-            public string sha { get; set; }
+            [JsonPropertyName("sha")]
+            public string Sha { get; set; }
         }
 
         private class ExistingPrItem
         {
-            public string title { get; set; }
-            public string number { get; set; }
-            public PrHead head { get; set; }
+            [JsonPropertyName("title")]
+            public string Title { get; set; }
+            [JsonPropertyName("number")]
+            public string Number { get; set; }
+            [JsonPropertyName("head")]
+            public PrHead Head { get; set; }
         }
 
         private class CreatePrResponse
         {
-            public string number { get; set; }
-            public string node_id { get; set; }
-            public bool? mergeable { get; set; }
+            [JsonPropertyName("number")]
+            public string Number { get; set; }
+            [JsonPropertyName("node_id")]
+            public string NodeId { get; set; }
+            [JsonPropertyName("mergeable")]
+            public bool? Mergeable { get; set; }
         }
 
         private class AssigneeItem
         {
-            public string login { get; set; }
+            [JsonPropertyName("login")]
+            public string Login { get; set; }
         }
 
         private class AssigneeResponse
         {
-            public AssigneeItem[] assignees { get; set; }
+            [JsonPropertyName("assignees")]
+            public AssigneeItem[] Assignees { get; set; }
         }
 
         private class AutoMergeError
         {
-            public string message { get; set; }
+            [JsonPropertyName("message")]
+            public string Message { get; set; }
         }
 
         private class AutoMergeResponse
         {
-            public AutoMergeError[] errors { get; set; }
+            [JsonPropertyName("errors")]
+            public AutoMergeError[] Errors { get; set; }
         }
 
         private class PrStatusLabel
         {
-            public string name { get; set; }
+            [JsonPropertyName("name")]
+            public string Name { get; set; }
         }
 
         private class PrStatusResponse
         {
-            public bool? mergeable { get; set; }
-            public string mergeable_state { get; set; }
-            public PrStatusLabel[] labels { get; set; }
+            [JsonPropertyName("mergeable")]
+            public bool? Mergeable { get; set; }
+            [JsonPropertyName("mergeable_state")]
+            public string MergeableState { get; set; }
+            [JsonPropertyName("labels")]
+            public PrStatusLabel[] Labels { get; set; }
         }
 
         private class SearchItem
         {
-            public string title { get; set; }
-            public int number { get; set; }
+            [JsonPropertyName("title")]
+            public string Title { get; set; }
+            [JsonPropertyName("number")]
+            public int Number { get; set; }
         }
 
         private class SearchResponse
         {
-            public SearchItem[] items { get; set; }
+            [JsonPropertyName("items")]
+            public SearchItem[] Items { get; set; }
         }
 
         /// <summary>
@@ -158,15 +181,15 @@ namespace GithubMergeTool
         /// (false, null) if the PR was not created, for example if the branches are already in sync
         /// (false, error) if the PR was not created due to an error
         /// </returns>
-        public async Task<(bool prCreated, HttpResponseMessage response)> CreateMergePRAsync(
+        public async Task<(bool prCreated, HttpResponseMessage response)> CreateMergePr(
             string repoOwner,
             string repoName,
+            List<string> prOwners,
             string srcBranch,
             string destBranch,
-            bool addAutoMergeLabel,
-            bool isAutoTriggered,
             bool updateExistingPr,
-            List<string> prOwners)
+            bool addAutoMergeLabel,
+            bool isAutoTriggered)
         {
             // Check to see how far ahead the source branch is
             // https://developer.github.com/v3/repos/commits/#compare-two-commits
@@ -181,7 +204,7 @@ namespace GithubMergeTool
             var compareData = JsonSerializer.Deserialize<CompareResponse>(
                 await compareResponse.Content.ReadAsStringAsync(), s_jsonOptions);
 
-            var branchesSynched = compareData.behind_by == 0;
+            var branchesSynched = compareData.BehindBy == 0;
             if (branchesSynched)
             {
                 Console.WriteLine("The branches are already synched.");
@@ -200,7 +223,7 @@ namespace GithubMergeTool
             var sourceBranchData = JsonSerializer.Deserialize<SourceBranchResponse>(
                 await response.Content.ReadAsStringAsync(), s_jsonOptions);
 
-            var srcSha = sourceBranchData.@object.sha;
+            var srcSha = sourceBranchData.Object.Sha;
 
             string prTitle = $"Merge {srcBranch} to {destBranch}";
             string prBranchName = $"merges/{srcBranch}-to-{destBranch}";
@@ -224,8 +247,8 @@ namespace GithubMergeTool
                 if (updateExistingPr)
                 {
                     // Get the SHA of the PR branch HEAD
-                    var prSha = existingPrData.head.sha;
-                    var existingPrNumber = existingPrData.number;
+                    var prSha = existingPrData.Head.Sha;
+                    var existingPrNumber = existingPrData.Number;
 
                     // Check for merge conflicts
                     var existingPrConflicted = await IsPrConflicted(existingPrNumber);
@@ -335,9 +358,9 @@ git push upstream {prBranchName} --force
             var createPrData = JsonSerializer.Deserialize<CreatePrResponse>(
                 await response.Content.ReadAsStringAsync(), s_jsonOptions);
 
-            var prNumber = createPrData.number;
-            var prNodeId = createPrData.node_id;
-            var hasConflicts = !createPrData.mergeable;
+            var prNumber = createPrData.Number;
+            var prNodeId = createPrData.NodeId;
+            var hasConflicts = !createPrData.Mergeable;
 
             if (hasConflicts == null)
             {
@@ -374,7 +397,7 @@ git push upstream {prBranchName} --force
                 response = await AddAssignees(prNumber, prOwners);
                 var assigneeData = JsonSerializer.Deserialize<AssigneeResponse>(
                     await response.Content.ReadAsStringAsync(), s_jsonOptions);
-                Console.WriteLine("Actual assignees: " + (assigneeData.assignees.Any() ? string.Join(", ", assigneeData.assignees.Select(a => a.login)) : "(none)"));
+                Console.WriteLine("Actual assignees: " + (assigneeData.Assignees.Any() ? string.Join(", ", assigneeData.Assignees.Select(a => a.Login)) : "(none)"));
 
                 if (hasConflicts == true)
                 {
@@ -417,12 +440,12 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
             var enableAutoMergeData = JsonSerializer.Deserialize<AutoMergeResponse>(
                 await response.Content.ReadAsStringAsync(), s_jsonOptions);
 
-            if (enableAutoMergeData.errors is { } errors)
+            if (enableAutoMergeData.Errors is { } errors)
             {
                 Console.WriteLine("Failed to enable automerge on PR.");
                 foreach (var err in errors)
                 {
-                    Console.WriteLine(err.message);
+                    Console.WriteLine(err.Message);
                 }
             }
 
@@ -462,7 +485,7 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
                     var data = JsonSerializer.Deserialize<PrStatusResponse>(
                         await response.Content.ReadAsStringAsync(), s_jsonOptions);
 
-                    if (data.mergeable is null)
+                    if (data.Mergeable is null)
                     {
                         // GitHub is still computing the mergeability of this PR
                         continue;
@@ -470,11 +493,11 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
 
                     // "dirty" indicated merge conflicts causing the mergeability to be false
                     // see https://github.community/t5/How-to-use-Git-and-GitHub/API-Getting-the-reason-that-a-pull-request-isn-t-mergeable/td-p/5796
-                    var hasMergeConflicts = data.mergeable == false && data.mergeable_state == "dirty";
+                    var hasMergeConflicts = data.Mergeable == false && data.MergeableState == "dirty";
 
                     // treat the presense of a merge conflict label as unmergeable so that we do not
                     // update a corrected PR with new merge conflicts
-                    var hasMergeConflictsLabel = data.labels.Select(label => label.name).Contains(MergeConflictsLabelText);
+                    var hasMergeConflictsLabel = data.Labels.Select(label => label.Name).Contains(MergeConflictsLabelText);
 
                     prHasConflicts = hasMergeConflicts || hasMergeConflictsLabel;
                 }
@@ -528,9 +551,9 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
             var possibleMergePrs = JsonSerializer.Deserialize<SearchResponse>(
                 await prsResponse.Content.ReadAsStringAsync(), s_jsonOptions);
 
-            foreach (var possibleMergePr in possibleMergePrs.items)
+            foreach (var possibleMergePr in possibleMergePrs.Items)
             {
-                var match = MergePrTitlePattern.Match(possibleMergePr.title);
+                var match = MergePrTitlePattern.Match(possibleMergePr.Title);
                 if (!match.Success)
                 {
                     continue;
@@ -538,7 +561,7 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
 
                 mergePRs.Add(new MergePr()
                 {
-                    Number = possibleMergePr.number,
+                    Number = possibleMergePr.Number,
                     SrcBranch = match.Groups[1].Value,
                     DestBranch = match.Groups[2].Value
                 });
