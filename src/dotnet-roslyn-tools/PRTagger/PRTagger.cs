@@ -11,7 +11,7 @@ using Microsoft.RoslynTools.Products;
 using Microsoft.RoslynTools.Utilities;
 using Microsoft.TeamFoundation.Build.WebApi;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
-using Newtonsoft.Json;
+using System.Text.Json;
 using Repository = LibGit2Sharp.Repository;
 
 namespace Microsoft.RoslynTools.PRTagger;
@@ -288,7 +288,7 @@ internal static class PRTagger
         ILogger logger)
     {
         // https://docs.github.com/en/rest/issues/issues#create-an-issue
-        var response = await client.PostAsyncAsJson($"repos/dotnet/{gitHubRepoName}/issues", JsonConvert.SerializeObject(
+        var response = await client.PostAsyncAsJson($"repos/dotnet/{gitHubRepoName}/issues", JsonSerializer.Serialize(
             new
             {
                 title,

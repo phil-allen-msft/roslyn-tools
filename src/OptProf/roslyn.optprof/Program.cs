@@ -9,7 +9,7 @@ using System.CommandLine.Invocation;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using roslyn.optprof.json;
 using roslyn.optprof.lib;
@@ -123,7 +123,7 @@ namespace roslyn.optprof
             }
         }
 
-        private static JsonObject GetJsonManifest(string path)
+        private static VsixManifest GetJsonManifest(string path)
         {
             using (var vsix = Vsix.Create(path))
             {
@@ -154,13 +154,24 @@ namespace roslyn.optprof
 
         private static string ToJsonString((string Technology, string RelativeInstallationPath, string InstrumentationArguments) entry)
         {
-            var obj = new JsonObject
+            return JsonSerializer.Serialize(new IbcEntry
             {
-                ["Technology"] = entry.Technology,
-                ["RelativeInstallationPath"] = entry.RelativeInstallationPath,
-                ["InstrumentationArguments"] = entry.InstrumentationArguments
-            };
-            return obj.ToJsonString();
+                Technology = entry.Technology,
+                RelativeInstallationPath = entry.RelativeInstallationPath,
+                InstrumentationArguments = entry.InstrumentationArguments
+            });
+        }
+
+        private sealed class IbcEntry
+        {
+            [JsonPropertyName("Technology")]
+            public string Technology { get; set; }
+
+            [JsonPropertyName("RelativeInstallationPath")]
+            public string RelativeInstallationPath { get; set; }
+
+            [JsonPropertyName("InstrumentationArguments")]
+            public string InstrumentationArguments { get; set; }
         }
     }
 }

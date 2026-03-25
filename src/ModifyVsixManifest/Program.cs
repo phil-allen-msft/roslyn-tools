@@ -9,7 +9,8 @@ using System.IO.Packaging;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json.Nodes;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Xml.Linq;
 using Mono.Options;
 
@@ -102,19 +103,40 @@ namespace ModifyVsixManifest
                     jsonStr = reader.ReadToEnd();
                 }
 
-                var json = JsonNode.Parse(jsonStr)!.AsObject();
+                var manifest = JsonSerializer.Deserialize<ManifestDocument>(jsonStr);
 
-                var file = json["files"]!.AsArray().Single(f => (string?)f!["fileName"] == partName);
-                file!["sha256"] = BitConverter.ToString(partHash).Replace("-", "");
+                var file = manifest.Files.Single(f => f.FileName == partName);
+                file.Sha256 = BitConverter.ToString(partHash).Replace("-", "");
 
                 stream.Position = 0;
                 stream.SetLength(0);
 
                 using (var writer = new StreamWriter(stream, Encoding.UTF8, bufferSize: 2048, leaveOpen: false))
                 {
-                    writer.Write(json.ToJsonString());
+                    writer.Write(JsonSerializer.Serialize(manifest));
                 }
             }
+        }
+
+        private sealed class ManifestDocument
+        {
+            [JsonPropertyName("files")]
+            public ManifestFileEntry[] Files { get; set; }
+
+            [JsonExtensionData]
+            public Dictionary<string, JsonElement> AdditionalProperties { get; set; }
+        }
+
+        private sealed class ManifestFileEntry
+        {
+            [JsonPropertyName("fileName")]
+            public string FileName { get; set; }
+
+            [JsonPropertyName("sha256")]
+            public string Sha256 { get; set; }
+
+            [JsonExtensionData]
+            public Dictionary<string, JsonElement> AdditionalProperties { get; set; }
         }
     }
 }

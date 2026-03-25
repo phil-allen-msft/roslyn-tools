@@ -6,12 +6,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Packaging;
 using System.Text;
-using System.Text.Json.Nodes;
+using System.Text.Json;
 
 namespace roslyn.optprof.lib
 {
     public class Vsix : IDisposable
     {
+        private static readonly JsonSerializerOptions s_options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
         private IVsixPackage _package;
 
         public Vsix(IVsixPackage package)
@@ -25,12 +30,12 @@ namespace roslyn.optprof.lib
             return new Vsix(package);
         }
 
-        public JsonObject ParseJsonManifest(string pathToManifest)
+        public VsixManifest ParseJsonManifest(string pathToManifest)
         {
             using (var stream = _package.GetStream(pathToManifest))
             {
                 string jsonStr = stream.ReadToEnd();
-                return JsonNode.Parse(jsonStr)!.AsObject();
+                return JsonSerializer.Deserialize<VsixManifest>(jsonStr, s_options);
             }
         }
 

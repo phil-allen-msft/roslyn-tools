@@ -9,7 +9,7 @@ using System.Linq;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
 using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using SignTool.Json;
 
 namespace SignTool
@@ -379,14 +379,19 @@ outputConfig: Run tool to produce an orchestration json file with specified name
 
         private static string GetConfigFileKind(string path)
         {
-            var configFile = JsonNode.Parse(File.ReadAllText(path));
-            var kind = (string?)configFile?["kind"];
-            return string.IsNullOrEmpty(kind) ? "default" : kind;
+            var configFile = JsonSerializer.Deserialize<SignToolConfig>(File.ReadAllText(path), JsonOptions);
+            return string.IsNullOrEmpty(configFile?.Kind) ? "default" : configFile.Kind;
         }
 
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         };
+
+        private sealed class SignToolConfig
+        {
+            [JsonPropertyName("kind")]
+            public string Kind { get; set; }
+        }
     }
 }

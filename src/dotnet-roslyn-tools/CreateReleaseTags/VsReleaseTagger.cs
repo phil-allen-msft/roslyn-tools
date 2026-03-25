@@ -4,13 +4,14 @@
 
 using System.Collections.Immutable;
 using System.Net;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
 using Microsoft.RoslynTools.Products;
 using Microsoft.RoslynTools.Utilities;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
-using Newtonsoft.Json.Linq;
 
 namespace Microsoft.RoslynTools.CreateReleaseTags;
 
@@ -73,11 +74,11 @@ internal sealed partial class VsReleaseTagger(ILogger logger)
                 continue;
             }
 
-            JObject buildInformation;
+            BuildTagInfo buildInformation;
 
             try
             {
-                buildInformation = JObject.Parse(annotatedTag.Message);
+                buildInformation = JsonSerializer.Deserialize<BuildTagInfo>(annotatedTag.Message);
             }
             catch
             {
@@ -92,7 +93,7 @@ internal sealed partial class VsReleaseTagger(ILogger logger)
             }
 
             // It's not entirely clear to me how this format was chosen, but for consistency with old tags, we'll keep it
-            var buildId = $"{buildInformation["Branch"]?.ToString().Replace("/", ".")}-{buildInformation["BuildNumber"]}";
+            var buildId = $"{buildInformation?.Branch?.Replace("/", ".")}-{buildInformation?.BuildNumber}";
 
             string? possiblePreviewVersion = null;
             if (parts.Length == 2)
@@ -377,4 +378,13 @@ internal sealed partial class VsReleaseTagger(ILogger logger)
 
     [GeneratedRegex("^[0-9]+(\\.[0-9]+)*$")]
     private static partial Regex IsDottedVersion();
+
+    private sealed class BuildTagInfo
+    {
+        [JsonPropertyName("Branch")]
+        public string? Branch { get; set; }
+
+        [JsonPropertyName("BuildNumber")]
+        public string? BuildNumber { get; set; }
+    }
 }

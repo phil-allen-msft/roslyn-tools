@@ -5,13 +5,14 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.TeamFoundation.Build.WebApi;
 using Microsoft.TeamFoundation.Policy.WebApi;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
 using Microsoft.RoslynTools.PRFinder.Hosts;
 using Microsoft.RoslynTools.Utilities;
 using Microsoft.VisualStudio.Services.WebApi;
-using Newtonsoft.Json;
 using Task = System.Threading.Tasks.Task;
 using GitCommit = Microsoft.RoslynTools.PRFinder.GitCommit;
 
@@ -499,34 +500,13 @@ internal static partial class RoslynInsertionTool
         var fileName = Path.GetFileName(filePath);
         var manifestJson = File.ReadAllText(filePath);
 
-        var manifest = JsonConvert.DeserializeAnonymousType(manifestJson,
-            new
-            {
-                info = new
-                {
-                    manifestName = "",
-                    buildVersion = ""
-                },
-                packages = new[]
-                {
-                    new
-                    {
-                        payloads = new[]
-                        {
-                            new
-                            {
-                                url = ""
-                            }
-                        }
-                    }
-                }
-            });
+        var manifest = JsonSerializer.Deserialize<ComponentManifest>(manifestJson, s_jsonOptions);
 
         // Find the first package payload where the url is in the expected format `http://{drop url};{filename}`
-        var payload = manifest?.packages
-            .Where(package => package?.payloads is not null)
-            .SelectMany(package => package.payloads)
-            .FirstOrDefault(payload => payload?.url?.Contains(";") == true);
+        var payload = manifest?.Packages
+            .Where(package => package?.Payloads is not null)
+            .SelectMany(package => package.Payloads)
+            .FirstOrDefault(payload => payload?.Url?.Contains(";") == true);
 
         if (payload is null)
         {
@@ -535,14 +515,47 @@ internal static partial class RoslynInsertionTool
         }
 
         // Everything is uploaded to the same drop, so we can take the url of a package and generate the manifest url.
-        var url = new Uri($"{payload.url.Split(';')[0]};{fileName}");
-        if (manifest?.info is null)
+        var url = new Uri($"{payload.Url.Split(';')[0]};{fileName}");
+        if (manifest?.Info is null)
         {
             LogInformation($"GetComponentFromManifestFile: Manifest {filePath} did not contain valid info metadata.");
             return null;
         }
 
-        return new Component(manifest.info.manifestName, fileName, url, manifest.info.buildVersion);
+        return new Component(manifest.Info.ManifestName, fileName, url, manifest.Info.BuildVersion);
+    }
+
+    private static readonly JsonSerializerOptions s_jsonOptions = new JsonSerializerOptions
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private sealed class ManifestInfo
+    {
+        [JsonPropertyName("manifestName")]
+        public string ManifestName { get; set; } = "";
+        [JsonPropertyName("buildVersion")]
+        public string BuildVersion { get; set; } = "";
+    }
+
+    private sealed class ManifestPayload
+    {
+        [JsonPropertyName("url")]
+        public string Url { get; set; } = "";
+    }
+
+    private sealed class ManifestPackage
+    {
+        [JsonPropertyName("payloads")]
+        public ManifestPayload[] Payloads { get; set; } = Array.Empty<ManifestPayload>();
+    }
+
+    private sealed class ComponentManifest
+    {
+        [JsonPropertyName("info")]
+        public ManifestInfo Info { get; set; } = new ManifestInfo();
+        [JsonPropertyName("packages")]
+        public ManifestPackage[] Packages { get; set; } = Array.Empty<ManifestPackage>();
     }
 
     internal static async Task<(List<GitCommit> changes, string diffLink)> GetChangesBetweenBuildsAsync(Build fromBuild, Build tobuild)
@@ -608,49 +621,66 @@ internal static partial class RoslynInsertionTool
         var content = await response.Content.ReadAsStringAsync();
 
         // https://developer.github.com/v3/repos/commits/
-        var data = JsonConvert.DeserializeAnonymousType(content,
-            new
-            {
-                commits = new[]
-                {
-                    new
-                    {
-                        sha = "",
-                        commit = new
-                        {
-                            author = new
-                            {
-                                name = "",
-                                email = "",
-                                date = ""
-                            },
-                            committer = new
-                            {
-                                name = ""
-                            },
-                            message = ""
-                        },
-                        html_url = ""
-                    }
-                }
-            });
+        var data = JsonSerializer.Deserialize<GitHubCompareResponse>(content, s_jsonOptions);
 
-        var result = (data?.commits ?? Array.Empty<dynamic>())
+        var result = (data?.Commits ?? Array.Empty<GitHubCommit>())
             .Select(d =>
                 new GitCommit()
                 {
-                    Author = d.commit.author.name,
-                    Committer = d.commit.committer.name,
-                    CommitDate = DateTime.Parse(d.commit.author.date),
-                    Message = d.commit.message,
-                    CommitId = d.sha,
-                    RemoteUrl = d.html_url
+                    Author = d.Commit.Author.Name,
+                    Committer = d.Commit.Committer.Name,
+                    CommitDate = DateTime.Parse(d.Commit.Author.Date),
+                    Message = d.Commit.Message,
+                    CommitId = d.Sha,
+                    RemoteUrl = d.HtmlUrl
                 })
             // show HEAD first, base last
             .Reverse()
             .ToList();
 
         return (result, $"//github.com/{repoId}/compare/{fromSHA}...{toSHA}?w=1");
+    }
+
+    private sealed class GitHubCommitAuthor
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = "";
+        [JsonPropertyName("email")]
+        public string Email { get; set; } = "";
+        [JsonPropertyName("date")]
+        public string Date { get; set; } = "";
+    }
+
+    private sealed class GitHubCommitCommitter
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = "";
+    }
+
+    private sealed class GitHubCommitDetails
+    {
+        [JsonPropertyName("author")]
+        public GitHubCommitAuthor Author { get; set; } = new GitHubCommitAuthor();
+        [JsonPropertyName("committer")]
+        public GitHubCommitCommitter Committer { get; set; } = new GitHubCommitCommitter();
+        [JsonPropertyName("message")]
+        public string Message { get; set; } = "";
+    }
+
+    private sealed class GitHubCommit
+    {
+        [JsonPropertyName("sha")]
+        public string Sha { get; set; } = "";
+        [JsonPropertyName("commit")]
+        public GitHubCommitDetails Commit { get; set; } = new GitHubCommitDetails();
+        [JsonPropertyName("html_url")]
+        public string HtmlUrl { get; set; } = "";
+    }
+
+    private sealed class GitHubCompareResponse
+    {
+        [JsonPropertyName("commits")]
+        public GitHubCommit[] Commits { get; set; } = Array.Empty<GitHubCommit>();
     }
 
     internal static async Task<string> AppendChangesToDescriptionAsync(string prDescription, Build oldBuild, List<PRFinder.GitCommit> changes)

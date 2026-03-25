@@ -3,7 +3,8 @@
 // See the License.txt file in the project root for more information.
 
 using Microsoft.TeamFoundation.SourceControl.WebApi;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Microsoft.RoslynTools.Insertion;
 
@@ -83,11 +84,7 @@ internal static partial class RoslynInsertionTool
             {
                 LogInformation($"Reading Tests drop info from: {jsonPath}");
                 var jsonContent = File.ReadAllText(jsonPath);
-                var testsDropInfo = JsonConvert.DeserializeAnonymousType(jsonContent, new
-                {
-                    testsRunsettingsUri = "",
-                    stageConfigPath = ""
-                });
+                var testsDropInfo = JsonSerializer.Deserialize<TestsDropInfo>(jsonContent, s_jsonOptions);
 
                 if (testsDropInfo is null)
                 {
@@ -95,19 +92,19 @@ internal static partial class RoslynInsertionTool
                     continue;
                 }
 
-                if (string.IsNullOrEmpty(testsDropInfo.testsRunsettingsUri))
+                if (string.IsNullOrEmpty(testsDropInfo.TestsRunsettingsUri))
                 {
                     LogWarning($"'{jsonPath}' is missing 'testsRunsettingsUri' field.");
                     return null;
                 }
 
-                if (string.IsNullOrEmpty(testsDropInfo.stageConfigPath))
+                if (string.IsNullOrEmpty(testsDropInfo.StageConfigPath))
                 {
                     LogWarning($"'{jsonPath}' is missing 'stageConfigPath' field.");
                     return null;
                 }
 
-                return (testsDropInfo.testsRunsettingsUri, testsDropInfo.stageConfigPath);
+                return (testsDropInfo.TestsRunsettingsUri, testsDropInfo.StageConfigPath);
             }
             catch (Exception ex)
             {
@@ -145,5 +142,18 @@ internal static partial class RoslynInsertionTool
         }
 
         return null;
+    }
+
+    private static readonly JsonSerializerOptions s_jsonOptions = new JsonSerializerOptions
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private sealed class TestsDropInfo
+    {
+        [JsonPropertyName("testsRunsettingsUri")]
+        public string TestsRunsettingsUri { get; set; } = "";
+        [JsonPropertyName("stageConfigPath")]
+        public string StageConfigPath { get; set; } = "";
     }
 }

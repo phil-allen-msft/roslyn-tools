@@ -3,8 +3,9 @@
 // See the License.txt file in the project root for more information.
 
 using System.Xml.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
-using Newtonsoft.Json.Linq;
 
 namespace Microsoft.RoslynTools.Utilities;
 
@@ -36,9 +37,9 @@ internal static class VisualStudioRepository
     public static async Task<string?> GetUrlFromComponentJsonFileAsync(string gitVersion, GitVersionType versionType, AzDOConnection devdiv, string jsonFile, string componentName)
     {
         var fileContents = await GetFileContentsAsync(gitVersion, versionType, devdiv, jsonFile);
-        var componentsJson = JObject.Parse(fileContents);
+        var componentsJson = JsonSerializer.Deserialize<ComponentsLookup>(fileContents);
 
-        var url = componentsJson["Components"]?[componentName]?["url"]?.ToString();
+        var url = componentsJson?.Components?.GetValueOrDefault(componentName)?.Url;
         return url;
     }
 
@@ -107,5 +108,17 @@ internal static class VisualStudioRepository
         {
             return string.Empty;
         }
+    }
+
+    private sealed class ComponentUrlInfo
+    {
+        [JsonPropertyName("url")]
+        public string? Url { get; set; }
+    }
+
+    private sealed class ComponentsLookup
+    {
+        [JsonPropertyName("Components")]
+        public Dictionary<string, ComponentUrlInfo>? Components { get; set; }
     }
 }

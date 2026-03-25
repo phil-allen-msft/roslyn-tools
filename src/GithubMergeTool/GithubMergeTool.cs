@@ -86,7 +86,7 @@ namespace GithubMergeTool
 
             var compareData = JsonSerializer.Deserialize<CompareResult>(await compareResponse.Content.ReadAsStringAsync(), s_jsonOptions);
 
-            var branchesSynched = compareData.behind_by == 0;
+            var branchesSynched = compareData.BehindBy == 0;
             if (branchesSynched)
             {
                 Console.WriteLine("The branches are already synched.");
@@ -249,7 +249,7 @@ git push upstream {prBranchName} --force
 
             var prNumber = createPrData.Number;
             var prNodeId = createPrData.NodeId;
-            var hasConflicts = createPrData.Mergeable == null ? (bool?)null : !createPrData.Mergeable;
+            var hasConflicts = createPrData.Mergeable.HasValue ? !createPrData.Mergeable.Value : (bool?)null;
 
             if (hasConflicts == null)
             {

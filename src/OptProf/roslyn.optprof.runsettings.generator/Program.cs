@@ -8,7 +8,8 @@ using System.CommandLine.Invocation;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json.Nodes;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using roslyn.optprof.json;
 using roslyn.optprof.lib;
@@ -111,11 +112,11 @@ namespace roslyn.optprof.runsettings.generator
         {
             try
             {
-                var jsonContent = JsonNode.Parse(bootstrapperInfoJson);
-                var dropUrl = (string)jsonContent!.AsArray()[0]!["BuildDrop"];
+                var entries = JsonSerializer.Deserialize<BootstrapperInfoEntry[]>(bootstrapperInfoJson);
+                var dropUrl = entries?[0]?.BuildDrop;
 
                 const string prefix = "https://vsdrop.corp.microsoft.com/file/v1/Products/";
-                if (!dropUrl.StartsWith(prefix, StringComparison.Ordinal))
+                if (dropUrl == null || !dropUrl.StartsWith(prefix, StringComparison.Ordinal))
                 {
                     throw new ApplicationException($"Invalid drop URL: '{dropUrl}'");
                 }
@@ -129,6 +130,12 @@ namespace roslyn.optprof.runsettings.generator
                     $"Content of BootstrapperInfo.json:{Environment.NewLine}" +
                     $"{bootstrapperInfoJson}");
             }
+        }
+
+        private sealed class BootstrapperInfoEntry
+        {
+            [JsonPropertyName("BuildDrop")]
+            public string BuildDrop { get; set; }
         }
 
         private static string GetProfilingInputsDropName(string vsDropName)

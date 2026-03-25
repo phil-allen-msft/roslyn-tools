@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Xml.XPath;
@@ -22,7 +22,7 @@ namespace Roslyn.Insertion
     internal class CoreXT
     {
         private static Dictionary<string, string> ComponentToFileMap = null!;
-        private static Dictionary<string, (string original, JsonObject document)> ComponentFileToDocumentMap = null!;
+        private static Dictionary<string, (string original, ComponentsJson document)> ComponentFileToDocumentMap = null!;
         private static HashSet<string> dirtyComponentFiles = null!;
 
         /// <summary>
@@ -75,7 +75,7 @@ namespace Roslyn.Insertion
             }
 
             ComponentToFileMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            ComponentFileToDocumentMap = new Dictionary<string, (string, JsonObject)>(StringComparer.OrdinalIgnoreCase);
+            ComponentFileToDocumentMap = new Dictionary<string, (string, ComponentsJson)>(StringComparer.OrdinalIgnoreCase);
             dirtyComponentFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             PackageToPropFilesMap = new Dictionary<string, ICollection<string>>(StringComparer.OrdinalIgnoreCase);
@@ -135,7 +135,7 @@ namespace Roslyn.Insertion
                     }
 
                     // Preserve trailing newline if present
-                    var newText = doc.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + (original.EndsWith("\n") ? "\n" : "");
+                    var newText = JsonSerializer.Serialize(doc, s_writeIndentedOptions) + (original.EndsWith("\n") ? "\n" : "");
                     if (RoslynInsertionTool.GetChangeOpt(kvp.Key, original, newText) is GitChange change)
                     {
                         changes.Add(change);
@@ -274,23 +274,25 @@ namespace Roslyn.Insertion
         {
             component = null;
 
-            (_, JsonObject? componentDocument) = GetJsonDocumentForComponent(componentName);
+            (_, ComponentsJson? componentDocument) = GetJsonDocumentForComponent(componentName);
 
-            if (componentDocument == null)
+            if (componentDocument?.Components == null)
             {
                 return false;
             }
 
-            var componentJSON = componentDocument["Components"]?[componentName];
-            if (componentJSON == null)
+            if (!componentDocument.Components.TryGetValue(componentName, out var entry) || entry == null)
             {
                 return false;
             }
 
-            var componentFilename = (string?)componentJSON["fileName"];
-            var componentUri = new Uri((string?)componentJSON["url"]);
-            var version = (string?)componentJSON["version"]; // might not be present
-            component = new Component(componentName, componentFilename, componentUri, version);
+            if (string.IsNullOrEmpty(entry.FileName) || string.IsNullOrEmpty(entry.Url))
+            {
+                return false;
+            }
+
+            var componentUri = new Uri(entry.Url);
+            component = new Component(componentName, entry.FileName, componentUri, entry.Version);
             return true;
         }
 
@@ -298,29 +300,20 @@ namespace Roslyn.Insertion
         {
             var (_, componentDocument) = GetJsonDocumentForComponent(component.Name);
 
-            if (componentDocument is null)
+            if (componentDocument?.Components == null)
             {
                 return;
             }
 
-            var componentJSON = componentDocument["Components"]?[component.Name]?.AsObject();
-            if (componentJSON is null)
+            if (!componentDocument.Components.TryGetValue(component.Name, out var entry) || entry == null)
             {
                 return;
             }
 
-            componentJSON["fileName"] = component.Filename;
-            componentJSON["url"] = component.Uri.ToString();
-            if (component.Version == null)
-            {
-                // ensure no 'version' property is set in the JSON
-                componentJSON.Remove("version");
-            }
-            else
-            {
-                // otherwise set or update the version
-                componentJSON["version"] = component.Version;
-            }
+            entry.FileName = component.Filename;
+            entry.Url = component.Uri.ToString();
+            // Version is [JsonIgnore(WhenWritingNull)] so setting to null removes it from output
+            entry.Version = component.Version;
 
             string componentFilePath = ComponentToFileMap[component.Name];
             dirtyComponentFiles.Add(componentFilePath);
@@ -337,12 +330,11 @@ namespace Roslyn.Insertion
                 PopulateComponentToFileMapForFile(mainComponentsJsonDocument, ComponentsJsonPath);
 
                 // Process sub components.json
-                var imports = mainComponentsJsonDocument["Imports"]?.AsArray();
+                var imports = mainComponentsJsonDocument.Imports;
                 if (imports != null)
                 {
-                    foreach (var import in imports)
+                    foreach (var subComponentFileName in imports)
                     {
-                        var subComponentFileName = import?.GetValue<string>();
 
                         if (!string.IsNullOrEmpty(subComponentFileName))
                         {
@@ -360,26 +352,21 @@ namespace Roslyn.Insertion
             }
         }
 
-        private static void PopulateComponentToFileMapForFile(JsonObject jDocument, string componentsJsonFileName)
+        private static void PopulateComponentToFileMapForFile(ComponentsJson jDocument, string componentsJsonFileName)
         {
-            if (jDocument != null && !string.IsNullOrEmpty(componentsJsonFileName))
+            if (jDocument?.Components != null && componentsJsonFileName != null)
             {
-                var jComponents = jDocument["Components"]?.AsObject();
-
-                if (jComponents != null && jComponents.Count > 0)
+                foreach (var kvp in jDocument.Components)
                 {
-                    foreach (var kvp in jComponents)
+                    if (!ComponentToFileMap.ContainsKey(kvp.Key))
                     {
-                        if (!ComponentToFileMap.ContainsKey(kvp.Key))
-                        {
-                            ComponentToFileMap[kvp.Key] = componentsJsonFileName;
-                        }
+                        ComponentToFileMap[kvp.Key] = componentsJsonFileName;
                     }
                 }
             }
         }
 
-        private static async Task<(string original, JsonObject document)> GetJsonDocumentForComponentsFile(
+        private static async Task<(string original, ComponentsJson document)> GetJsonDocumentForComponentsFile(
             GitHttpClient gitClient,
             string commitId,
             string componentsJSONPath)
@@ -389,7 +376,7 @@ namespace Roslyn.Insertion
             {
                 using var fileStream = await gitClient.GetItemContentAsync(RoslynInsertionTool.VSRepoId, path: componentsJSONPath, versionDescriptor: versionDescriptor);
                 var original = await new StreamReader(fileStream).ReadToEndAsync();
-                var jsonDocument = JsonNode.Parse(original)!.AsObject();
+                var jsonDocument = JsonSerializer.Deserialize<ComponentsJson>(original, s_componentsOptions);
                 return (original, jsonDocument);
             }
             catch (Exception e)
@@ -398,9 +385,9 @@ namespace Roslyn.Insertion
             }
         }
 
-        private (string? original, JsonObject? document) GetJsonDocumentForComponent(string componentName)
+        private (string? original, ComponentsJson? document) GetJsonDocumentForComponent(string componentName)
         {
-            (string?, JsonObject?) pair = (null, null);
+            (string?, ComponentsJson?) pair = (null, null);
 
             if (!string.IsNullOrEmpty(componentName))
             {
@@ -413,6 +400,44 @@ namespace Roslyn.Insertion
             }
 
             return pair;
+        }
+
+        private static readonly JsonSerializerOptions s_componentsOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        private static readonly JsonSerializerOptions s_writeIndentedOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true
+        };
+
+        private sealed class ComponentsJson
+        {
+            [JsonPropertyName("Imports")]
+            public string[] Imports { get; set; }
+
+            [JsonPropertyName("Components")]
+            public Dictionary<string, ComponentEntry> Components { get; set; }
+
+            [JsonExtensionData]
+            public Dictionary<string, JsonElement> AdditionalProperties { get; set; }
+        }
+
+        private sealed class ComponentEntry
+        {
+            [JsonPropertyName("fileName")]
+            public string FileName { get; set; }
+
+            [JsonPropertyName("url")]
+            public string Url { get; set; }
+
+            [JsonPropertyName("version")]
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public string Version { get; set; }
+
+            [JsonExtensionData]
+            public Dictionary<string, JsonElement> AdditionalProperties { get; set; }
         }
 
         private static async Task<bool> IsFilePresentAsync(

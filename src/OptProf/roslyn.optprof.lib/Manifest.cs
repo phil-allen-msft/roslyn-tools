@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 namespace roslyn.optprof.lib
@@ -16,50 +15,48 @@ namespace roslyn.optprof.lib
         public const string ARGS = "/ExeConfig:\"%VisualStudio.InstallationUnderTest.Path%\\Common7\\IDE\\vsn.exe\"";
         public const string ROOT = "%VisualStudio.InstallationUnderTest.Path%";
 
-        public static IEnumerable<(string Technology, string RelativeInstallationPath, string InstrumentationArguments)> GetNgenEntriesFromJsonManifest(JsonObject json)
+        public static IEnumerable<(string Technology, string RelativeInstallationPath, string InstrumentationArguments)> GetNgenEntriesFromJsonManifest(VsixManifest json)
         {
-            if (json["extensionDir"] != null)
+            if (json.ExtensionDir != null)
             {
-                var extensionDir = ((string)json["extensionDir"]).Replace("[installdir]\\", string.Empty);
-                return json["files"]!.AsArray()
+                var extensionDir = json.ExtensionDir.Replace("[installdir]\\", string.Empty);
+                return json.Files
                     .Where(file => IsNgened(file) && IsAssembly(file))
                     .Select(file =>
                     {
                         string Technology = IBC;
-                        string RelativeInstallationPath = $"{extensionDir}\\{((string)file["fileName"]).Replace("/", string.Empty)}";
+                        string RelativeInstallationPath = $"{extensionDir}\\{file.FileName.Replace("/", string.Empty)}";
                         string InstrumentationArguments = ARGS;
                         return (Technology, RelativeInstallationPath, InstrumentationArguments);
                     });
             }
             else
             {
-                return json["files"]!.AsArray()
+                return json.Files
                     .Where(file => IsNgened(file) && IsAssembly(file))
                     .Select(file =>
                     {
                         string Technology = IBC;
-                        string RelativeInstallationPath = ((string)file["fileName"]).Replace("/Contents/", string.Empty).Replace("/", "\\");
-                        string InstrumentationArguments = file["ngenApplication"] != null
-                            ? $"/ExeConfig:\"{ROOT}{((string)file["ngenApplication"]).Replace("[installDir]", string.Empty)}\""
+                        string RelativeInstallationPath = file.FileName.Replace("/Contents/", string.Empty).Replace("/", "\\");
+                        string InstrumentationArguments = file.NgenApplication != null
+                            ? $"/ExeConfig:\"{ROOT}{file.NgenApplication.Replace("[installDir]", string.Empty)}\""
                             : ARGS;
                         return (Technology, RelativeInstallationPath, InstrumentationArguments);
                     });
             }
         }
 
-        private static bool IsNgened(JsonNode file)
-            => file["ngen"] != null || file["ngenPriority"] != null || file["ngenArchitecture"] != null || file["ngenApplication"] != null;
+        private static bool IsNgened(VsixManifestFile file)
+            => file.Ngen != null || file.NgenPriority != null || file.NgenArchitecture != null || file.NgenApplication != null;
 
-
-        private static bool IsAssembly(JsonNode file)
+        private static bool IsAssembly(VsixManifestFile file)
         {
-            if (file["fileName"] == null)
+            if (file.FileName == null)
             {
                 return false;
             }
 
-            var fileName = (string)file["fileName"];
-            return fileName.EndsWith("dll") || fileName.EndsWith("exe");
+            return file.FileName.EndsWith("dll") || file.FileName.EndsWith("exe");
         }
     }
 }
