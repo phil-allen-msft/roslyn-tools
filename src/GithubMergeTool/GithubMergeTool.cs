@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the License.txt file in the project root for more information.
 
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,6 +9,8 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -83,14 +84,7 @@ namespace GithubMergeTool
                 return (false, compareResponse);
             }
 
-            var compareData = JsonConvert.DeserializeAnonymousType(await compareResponse.Content.ReadAsStringAsync(),
-                new
-                {
-                    status = "",
-                    ahead_by = 0,
-                    behind_by = 0,
-                    total_commits = 0
-                });
+            var compareData = JsonSerializer.Deserialize<CompareResult>(await compareResponse.Content.ReadAsStringAsync(), s_jsonOptions);
 
             var branchesSynched = compareData.behind_by == 0;
             if (branchesSynched)
@@ -108,13 +102,9 @@ namespace GithubMergeTool
                 return (false, response);
             }
 
-            var sourceBranchData = JsonConvert.DeserializeAnonymousType(await response.Content.ReadAsStringAsync(),
-                new
-                {
-                    @object = new { sha = "" }
-                });
+            var sourceBranchData = JsonSerializer.Deserialize<RefData>(await response.Content.ReadAsStringAsync(), s_jsonOptions);
 
-            var srcSha = sourceBranchData.@object.sha;
+            var srcSha = sourceBranchData.Object.Sha;
 
             string prTitle = $"Merge {srcBranch} to {destBranch}";
             string prBranchName = $"merges/{srcBranch}-to-{destBranch}";
@@ -129,27 +119,16 @@ namespace GithubMergeTool
                 return (false, prsResponse);
             }
 
-            var existingPrData = JsonConvert.DeserializeAnonymousType(await prsResponse.Content.ReadAsStringAsync(),
-                new[]
-                {
-                    new
-                    {
-                        title = "",
-                        number = "",
-                        head = new
-                        {
-                            sha = ""
-                        }
-                    }
-                }).FirstOrDefault(pr => pr.title == prTitle);
+            var existingPrData = JsonSerializer.Deserialize<PrInfo[]>(await prsResponse.Content.ReadAsStringAsync(), s_jsonOptions)
+                ?.FirstOrDefault(pr => pr.Title == prTitle);
 
             if (existingPrData != null)
             {
                 if (updateExistingPr)
                 {
                     // Get the SHA of the PR branch HEAD
-                    var prSha = existingPrData.head.sha;
-                    var existingPrNumber = existingPrData.number;
+                    var prSha = existingPrData.Head.Sha;
+                    var existingPrNumber = existingPrData.Number;
 
                     // Check for merge conflicts
                     var existingPrConflicted = await IsPrConflicted(existingPrNumber);
@@ -190,7 +169,7 @@ namespace GithubMergeTool
 
             // Create a PR branch on the repo
             // https://developer.github.com/v3/git/refs/#create-a-reference
-            response = await _client.PostAsyncAsJson($"repos/{repoOwner}/{repoName}/git/refs", JsonConvert.SerializeObject(
+            response = await _client.PostAsyncAsJson($"repos/{repoOwner}/{repoName}/git/refs", JsonSerializer.Serialize(
                 new
                 {
                     @ref = $"refs/heads/{prBranchName}",
@@ -248,7 +227,7 @@ git push upstream {prBranchName} --force
 
             // Create a PR from the new branch to the dest
             // https://developer.github.com/v3/pulls/#create-a-pull-request
-            response = await _client.PostAsyncAsJson($"repos/{repoOwner}/{repoName}/pulls", JsonConvert.SerializeObject(
+            response = await _client.PostAsyncAsJson($"repos/{repoOwner}/{repoName}/pulls", JsonSerializer.Serialize(
                 new
                 {
                     title = prTitle,
@@ -266,16 +245,11 @@ git push upstream {prBranchName} --force
                 return (false, null);
             }
 
-            var createPrData = JsonConvert.DeserializeAnonymousType(await response.Content.ReadAsStringAsync(), new
-            {
-                number = "",
-                node_id = "",
-                mergeable = (bool?)null
-            });
+            var createPrData = JsonSerializer.Deserialize<CreatePrResult>(await response.Content.ReadAsStringAsync(), s_jsonOptions);
 
-            var prNumber = createPrData.number;
-            var prNodeId = createPrData.node_id;
-            var hasConflicts = !createPrData.mergeable;
+            var prNumber = createPrData.Number;
+            var prNodeId = createPrData.NodeId;
+            var hasConflicts = createPrData.Mergeable == null ? (bool?)null : !createPrData.Mergeable;
 
             if (hasConflicts == null)
             {
@@ -310,11 +284,8 @@ git push upstream {prBranchName} --force
                 }
 
                 response = await AddAssignees(prNumber, prOwners);
-                var assigneeData = JsonConvert.DeserializeAnonymousType(await response.Content.ReadAsStringAsync(), new
-                {
-                    assignees = new[] { new { login = "" } }
-                });
-                Console.WriteLine("Actual assignees: " + (assigneeData.assignees.Any() ? string.Join(", ", assigneeData.assignees.Select(a => a.login)) : "(none)"));
+                var assigneeData = JsonSerializer.Deserialize<AssigneesResult>(await response.Content.ReadAsStringAsync(), s_jsonOptions);
+                Console.WriteLine("Actual assignees: " + (assigneeData.Assignees.Any() ? string.Join(", ", assigneeData.Assignees.Select(a => a.Login)) : "(none)"));
 
                 if (hasConflicts == true)
                 {
@@ -328,7 +299,7 @@ git push upstream {prBranchName} --force
             }
 
             // https://docs.github.com/en/graphql/reference/mutations#enablepullrequestautomerge
-            response = await _client.PostAsyncAsJson("https://api.github.com/graphql", JsonConvert.SerializeObject(new
+            response = await _client.PostAsyncAsJson("https://api.github.com/graphql", JsonSerializer.Serialize(new
             {
                 query = @"
 mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
@@ -353,16 +324,15 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
                 }
             }));
 
-            var enableAutoMergeData = JsonConvert.DeserializeAnonymousType(
-                await response.Content.ReadAsStringAsync(),
-                new { errors = new[] { new { message = "" } } });
+            var enableAutoMergeData = JsonSerializer.Deserialize<GraphQLResult>(
+                await response.Content.ReadAsStringAsync(), s_jsonOptions);
 
-            if (enableAutoMergeData.errors is { } errors)
+            if (enableAutoMergeData?.Errors is { } errors)
             {
                 Console.WriteLine("Failed to enable automerge on PR.");
                 foreach (var err in errors)
                 {
-                    Console.WriteLine(err.message);
+                    Console.WriteLine(err.Message);
                 }
             }
 
@@ -373,18 +343,18 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
                 Console.WriteLine($"Resetting branch {branchName}");
 
                 // https://developer.github.com/v3/git/refs/#update-a-reference
-                var body = JsonConvert.SerializeObject(new { sha, force });
+                var body = JsonSerializer.Serialize(new { sha, force });
                 return _client.PostAsyncAsJson($"repos/{repoOwner}/{repoName}/git/refs/heads/{branchName}", body);
             }
 
-            Task<HttpResponseMessage> PostComment(string prNumber, string comment)
+            Task<HttpResponseMessage> PostComment(int prNumber, string comment)
             {
                 // https://developer.github.com/v3/pulls/comments/#create-a-comment
-                var body = JsonConvert.SerializeObject(new { body = comment });
+                var body = JsonSerializer.Serialize(new { body = comment });
                 return _client.PostAsyncAsJson($"repos/{repoOwner}/{repoName}/issues/{prNumber}/comments", body);
             }
 
-            async Task<bool?> IsPrConflicted(string prNumber, int maxAttempts = 5)
+            async Task<bool?> IsPrConflicted(int prNumber, int maxAttempts = 5)
             {
                 var attempt = 0;
                 bool? prHasConflicts = null;
@@ -399,17 +369,9 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
                     // Get the pull request
                     // https://developer.github.com/v3/pulls/#get-a-single-pull-request
                     var response = await _client.GetAsync($"repos/{repoOwner}/{repoName}/pulls/{prNumber}");
-                    var data = JsonConvert.DeserializeAnonymousType(await response.Content.ReadAsStringAsync(), new
-                    {
-                        mergeable = (bool?)null,
-                        mergeable_state = "",
-                        labels = new[]
-                        {
-                            new { name = "" }
-                        }
-                    });
+                    var data = JsonSerializer.Deserialize<PrDetails>(await response.Content.ReadAsStringAsync(), s_jsonOptions);
 
-                    if (data.mergeable is null)
+                    if (data?.Mergeable is null)
                     {
                         // GitHub is still computing the mergeability of this PR
                         continue;
@@ -417,11 +379,11 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
 
                     // "dirty" indicated merge conflicts causing the mergeability to be false
                     // see https://github.community/t5/How-to-use-Git-and-GitHub/API-Getting-the-reason-that-a-pull-request-isn-t-mergeable/td-p/5796
-                    var hasMergeConflicts = data.mergeable == false && data.mergeable_state == "dirty";
+                    var hasMergeConflicts = data.Mergeable == false && data.MergeableState == "dirty";
 
                     // treat the presense of a merge conflict label as unmergeable so that we do not
                     // update a corrected PR with new merge conflicts
-                    var hasMergeConflictsLabel = data.labels.Select(label => label.name).Contains(MergeConflictsLabelText);
+                    var hasMergeConflictsLabel = data.Labels.Select(label => label.Name).Contains(MergeConflictsLabelText);
 
                     prHasConflicts = hasMergeConflicts || hasMergeConflictsLabel;
                 }
@@ -436,16 +398,16 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
                 return prHasConflicts;
             }
 
-            Task<HttpResponseMessage> AddLabels(string prNumber, List<string> labels)
+            Task<HttpResponseMessage> AddLabels(int prNumber, List<string> labels)
             {
                 // https://developer.github.com/v3/issues/labels/#add-labels-to-an-issue
-                return _client.PostAsyncAsJson($"repos/{repoOwner}/{repoName}/issues/{prNumber}/labels", JsonConvert.SerializeObject(labels));
+                return _client.PostAsyncAsJson($"repos/{repoOwner}/{repoName}/issues/{prNumber}/labels", JsonSerializer.Serialize(labels));
             }
 
-            Task<HttpResponseMessage> AddAssignees(string prNumber, List<string> assignees)
+            Task<HttpResponseMessage> AddAssignees(int prNumber, List<string> assignees)
             {
                 // https://developer.github.com/v3/issues/assignees/#add-assignees-to-an-issue
-                return _client.PostAsyncAsJson($"repos/{repoOwner}/{repoName}/issues/{prNumber}/assignees", JsonConvert.SerializeObject(new { assignees }));
+                return _client.PostAsyncAsJson($"repos/{repoOwner}/{repoName}/issues/{prNumber}/assignees", JsonSerializer.Serialize(new { assignees }));
             }
 
             async Task<bool> IsInvalidAssignee(string assignee)
@@ -470,22 +432,11 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
                 return (mergePRs, prsResponse);
             }
 
-            var possibleMergePrs = JsonConvert.DeserializeAnonymousType(await prsResponse.Content.ReadAsStringAsync(),
-                new
-                {
-                    items = new[]
-                    {
-                        new
-                        {
-                            title = "",
-                            number = 0
-                        }
-                    }
-                });
+            var possibleMergePrs = JsonSerializer.Deserialize<SearchResults>(await prsResponse.Content.ReadAsStringAsync(), s_jsonOptions);
 
-            foreach (var possibleMergePr in possibleMergePrs.items)
+            foreach (var possibleMergePr in possibleMergePrs.Items)
             {
-                var match = MergePrTitlePattern.Match(possibleMergePr.title);
+                var match = MergePrTitlePattern.Match(possibleMergePr.Title);
                 if (!match.Success)
                 {
                     continue;
@@ -493,7 +444,7 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
 
                 mergePRs.Add(new MergePr()
                 {
-                    Number = possibleMergePr.number,
+                    Number = possibleMergePr.Number,
                     SrcBranch = match.Groups[1].Value,
                     DestBranch = match.Groups[2].Value
                 });
@@ -514,5 +465,114 @@ mutation ($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
         public const string AutoMergeLabelText = "auto-merge";
         public const string MergeConflictsLabelText = "Merge Conflicts";
         public const string AreaInfrastructureLabelText = "Area-Infrastructure";
+
+        private static readonly JsonSerializerOptions s_jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        private sealed class CompareResult
+        {
+            [JsonPropertyName("status")]
+            public string Status { get; set; } = "";
+            [JsonPropertyName("ahead_by")]
+            public int AheadBy { get; set; }
+            [JsonPropertyName("behind_by")]
+            public int BehindBy { get; set; }
+            [JsonPropertyName("total_commits")]
+            public int TotalCommits { get; set; }
+        }
+
+        private sealed class RefObject
+        {
+            [JsonPropertyName("sha")]
+            public string Sha { get; set; } = "";
+        }
+
+        private sealed class RefData
+        {
+            [JsonPropertyName("object")]
+            public RefObject Object { get; set; } = new RefObject();
+        }
+
+        private sealed class PrHead
+        {
+            [JsonPropertyName("sha")]
+            public string Sha { get; set; } = "";
+        }
+
+        private sealed class PrInfo
+        {
+            [JsonPropertyName("title")]
+            public string Title { get; set; } = "";
+            [JsonPropertyName("number")]
+            public int Number { get; set; }
+            [JsonPropertyName("head")]
+            public PrHead Head { get; set; } = new PrHead();
+        }
+
+        private sealed class CreatePrResult
+        {
+            [JsonPropertyName("number")]
+            public int Number { get; set; }
+            [JsonPropertyName("node_id")]
+            public string NodeId { get; set; } = "";
+            [JsonPropertyName("mergeable")]
+            public bool? Mergeable { get; set; }
+        }
+
+        private sealed class PrAssignee
+        {
+            [JsonPropertyName("login")]
+            public string Login { get; set; } = "";
+        }
+
+        private sealed class AssigneesResult
+        {
+            [JsonPropertyName("assignees")]
+            public PrAssignee[] Assignees { get; set; } = Array.Empty<PrAssignee>();
+        }
+
+        private sealed class GraphQLError
+        {
+            [JsonPropertyName("message")]
+            public string Message { get; set; } = "";
+        }
+
+        private sealed class GraphQLResult
+        {
+            [JsonPropertyName("errors")]
+            public GraphQLError[]? Errors { get; set; }
+        }
+
+        private sealed class PrLabel
+        {
+            [JsonPropertyName("name")]
+            public string Name { get; set; } = "";
+        }
+
+        private sealed class PrDetails
+        {
+            [JsonPropertyName("mergeable")]
+            public bool? Mergeable { get; set; }
+            [JsonPropertyName("mergeable_state")]
+            public string MergeableState { get; set; } = "";
+            [JsonPropertyName("labels")]
+            public PrLabel[] Labels { get; set; } = Array.Empty<PrLabel>();
+        }
+
+        private sealed class SearchResultItem
+        {
+            [JsonPropertyName("title")]
+            public string Title { get; set; } = "";
+            [JsonPropertyName("number")]
+            public int Number { get; set; }
+        }
+
+        private sealed class SearchResults
+        {
+            [JsonPropertyName("items")]
+            public SearchResultItem[] Items { get; set; } = Array.Empty<SearchResultItem>();
+        }
     }
 }

@@ -3,7 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using System.Text.Json;
 
 namespace Microsoft.RoslynTools.Authentication;
 
@@ -18,14 +18,14 @@ internal class LocalSettings
 
     public int SaveSettingsFile(ILogger logger)
     {
-        var settings = JsonConvert.SerializeObject(this);
+        var settings = JsonSerializer.Serialize(this);
         return EncodedFile.Create(Constants.SettingsFileName, settings, logger);
     }
 
     public static LocalSettings LoadSettingsFile()
     {
         var settings = EncodedFile.Read(Constants.SettingsFileName);
-        return JsonConvert.DeserializeObject<LocalSettings>(settings)!;
+        return JsonSerializer.Deserialize<LocalSettings>(settings)!;
     }
 
     /// <summary>

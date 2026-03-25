@@ -8,13 +8,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
 using Microsoft.VisualStudio.Services.Common;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using NuGet.Versioning;
 
 namespace Roslyn.Insertion
@@ -22,7 +22,7 @@ namespace Roslyn.Insertion
     internal class CoreXT
     {
         private static Dictionary<string, string> ComponentToFileMap = null!;
-        private static Dictionary<string, (string original, JObject document)> ComponentFileToDocumentMap = null!;
+        private static Dictionary<string, (string original, JsonObject document)> ComponentFileToDocumentMap = null!;
         private static HashSet<string> dirtyComponentFiles = null!;
 
         /// <summary>
@@ -75,7 +75,7 @@ namespace Roslyn.Insertion
             }
 
             ComponentToFileMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            ComponentFileToDocumentMap = new Dictionary<string, (string, JObject)>(StringComparer.OrdinalIgnoreCase);
+            ComponentFileToDocumentMap = new Dictionary<string, (string, JsonObject)>(StringComparer.OrdinalIgnoreCase);
             dirtyComponentFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             PackageToPropFilesMap = new Dictionary<string, ICollection<string>>(StringComparer.OrdinalIgnoreCase);
@@ -135,7 +135,7 @@ namespace Roslyn.Insertion
                     }
 
                     // Preserve trailing newline if present
-                    var newText = doc.ToString(Formatting.Indented) + (original.EndsWith("\n") ? "\n" : "");
+                    var newText = doc.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + (original.EndsWith("\n") ? "\n" : "");
                     if (RoslynInsertionTool.GetChangeOpt(kvp.Key, original, newText) is GitChange change)
                     {
                         changes.Add(change);
@@ -274,7 +274,7 @@ namespace Roslyn.Insertion
         {
             component = null;
 
-            (_, JObject? componentDocument) = GetJsonDocumentForComponent(componentName);
+            (_, JsonObject? componentDocument) = GetJsonDocumentForComponent(componentName);
 
             if (componentDocument == null)
             {
@@ -289,7 +289,7 @@ namespace Roslyn.Insertion
 
             var componentFilename = (string?)componentJSON["fileName"];
             var componentUri = new Uri((string?)componentJSON["url"]);
-            var version = componentJSON.Value<string>("version"); // might not be present
+            var version = (string?)componentJSON["version"]; // might not be present
             component = new Component(componentName, componentFilename, componentUri, version);
             return true;
         }
@@ -303,7 +303,7 @@ namespace Roslyn.Insertion
                 return;
             }
 
-            var componentJSON = (JObject?)componentDocument["Components"]?[component.Name];
+            var componentJSON = componentDocument["Components"]?[component.Name]?.AsObject();
             if (componentJSON is null)
             {
                 return;
@@ -314,8 +314,7 @@ namespace Roslyn.Insertion
             if (component.Version == null)
             {
                 // ensure no 'version' property is set in the JSON
-                var versionProperty = componentJSON.Property("version");
-                versionProperty?.Remove();
+                componentJSON.Remove("version");
             }
             else
             {
@@ -338,12 +337,12 @@ namespace Roslyn.Insertion
                 PopulateComponentToFileMapForFile(mainComponentsJsonDocument, ComponentsJsonPath);
 
                 // Process sub components.json
-                var imports = mainComponentsJsonDocument["Imports"];
+                var imports = mainComponentsJsonDocument["Imports"]?.AsArray();
                 if (imports != null)
                 {
                     foreach (var import in imports)
                     {
-                        var subComponentFileName = (string?)import;
+                        var subComponentFileName = import?.GetValue<string>();
 
                         if (!string.IsNullOrEmpty(subComponentFileName))
                         {
@@ -361,31 +360,26 @@ namespace Roslyn.Insertion
             }
         }
 
-        private static void PopulateComponentToFileMapForFile(JObject jDocument, string componentsJsonFileName)
+        private static void PopulateComponentToFileMapForFile(JsonObject jDocument, string componentsJsonFileName)
         {
             if (jDocument != null && !string.IsNullOrEmpty(componentsJsonFileName))
             {
-                var jComponents = (JObject?)jDocument["Components"];
+                var jComponents = jDocument["Components"]?.AsObject();
 
-                if (jComponents != null)
+                if (jComponents != null && jComponents.Count > 0)
                 {
-                    var componentsMap = jComponents.ToObject<Dictionary<string, JToken>>();
-
-                    if (componentsMap != null && componentsMap.Any())
+                    foreach (var kvp in jComponents)
                     {
-                        foreach (var kvp in componentsMap)
+                        if (!ComponentToFileMap.ContainsKey(kvp.Key))
                         {
-                            if (!ComponentToFileMap.ContainsKey(kvp.Key))
-                            {
-                                ComponentToFileMap[kvp.Key] = componentsJsonFileName;
-                            }
+                            ComponentToFileMap[kvp.Key] = componentsJsonFileName;
                         }
                     }
                 }
             }
         }
 
-        private static async Task<(string original, JObject document)> GetJsonDocumentForComponentsFile(
+        private static async Task<(string original, JsonObject document)> GetJsonDocumentForComponentsFile(
             GitHttpClient gitClient,
             string commitId,
             string componentsJSONPath)
@@ -395,7 +389,7 @@ namespace Roslyn.Insertion
             {
                 using var fileStream = await gitClient.GetItemContentAsync(RoslynInsertionTool.VSRepoId, path: componentsJSONPath, versionDescriptor: versionDescriptor);
                 var original = await new StreamReader(fileStream).ReadToEndAsync();
-                var jsonDocument = (JObject)JToken.Parse(original);
+                var jsonDocument = JsonNode.Parse(original)!.AsObject();
                 return (original, jsonDocument);
             }
             catch (Exception e)
@@ -404,9 +398,9 @@ namespace Roslyn.Insertion
             }
         }
 
-        private (string? original, JObject? document) GetJsonDocumentForComponent(string componentName)
+        private (string? original, JsonObject? document) GetJsonDocumentForComponent(string componentName)
         {
-            (string?, JObject?) pair = (null, null);
+            (string?, JsonObject?) pair = (null, null);
 
             if (!string.IsNullOrEmpty(componentName))
             {

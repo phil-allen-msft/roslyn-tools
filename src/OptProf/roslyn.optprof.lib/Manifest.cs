@@ -1,11 +1,11 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the License.txt file in the project root for more information.
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 namespace roslyn.optprof.lib
@@ -16,12 +16,12 @@ namespace roslyn.optprof.lib
         public const string ARGS = "/ExeConfig:\"%VisualStudio.InstallationUnderTest.Path%\\Common7\\IDE\\vsn.exe\"";
         public const string ROOT = "%VisualStudio.InstallationUnderTest.Path%";
 
-        public static IEnumerable<(string Technology, string RelativeInstallationPath, string InstrumentationArguments)> GetNgenEntriesFromJsonManifest(JObject json)
+        public static IEnumerable<(string Technology, string RelativeInstallationPath, string InstrumentationArguments)> GetNgenEntriesFromJsonManifest(JsonObject json)
         {
             if (json["extensionDir"] != null)
             {
                 var extensionDir = ((string)json["extensionDir"]).Replace("[installdir]\\", string.Empty);
-                return ((JArray)json["files"])
+                return json["files"]!.AsArray()
                     .Where(file => IsNgened(file) && IsAssembly(file))
                     .Select(file =>
                     {
@@ -33,7 +33,7 @@ namespace roslyn.optprof.lib
             }
             else
             {
-                return ((JArray)json["files"])
+                return json["files"]!.AsArray()
                     .Where(file => IsNgened(file) && IsAssembly(file))
                     .Select(file =>
                     {
@@ -47,11 +47,11 @@ namespace roslyn.optprof.lib
             }
         }
 
-        private static bool IsNgened(JToken file)
+        private static bool IsNgened(JsonNode file)
             => file["ngen"] != null || file["ngenPriority"] != null || file["ngenArchitecture"] != null || file["ngenApplication"] != null;
 
 
-        private static bool IsAssembly(JToken file)
+        private static bool IsAssembly(JsonNode file)
         {
             if (file["fileName"] == null)
             {

@@ -20,7 +20,8 @@ using Microsoft.TeamFoundation.Policy.WebApi;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
 using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Services.WebApi;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Task = System.Threading.Tasks.Task;
 
 namespace Roslyn.Insertion
@@ -460,33 +461,13 @@ namespace Roslyn.Insertion
             var fileName = Path.GetFileName(filePath);
             var manifestJson = File.ReadAllText(filePath);
 
-            var manifest = JsonConvert.DeserializeAnonymousType(manifestJson, new
-            {
-                info = new
-                {
-                    manifestName = "",
-                    buildVersion = ""
-                },
-                packages = new[]
-                {
-                new
-                {
-                    payloads = new[]
-                    {
-                        new
-                        {
-                            url = ""
-                        }
-                    }
-                }
-            }
-            });
+            var manifest = JsonSerializer.Deserialize<ComponentManifest>(manifestJson, JsonOptions);
 
             // Find the first package payload where the url is in the expected format `http://{drop url};{filename}`
-            var payload = manifest?.packages
-                .Where(package => package?.payloads is not null)
-                .SelectMany(package => package.payloads)
-                .FirstOrDefault(payload => payload?.url?.Contains(";") == true);
+            var payload = manifest?.Packages
+                .Where(package => package?.Payloads is not null)
+                .SelectMany(package => package.Payloads)
+                .FirstOrDefault(payload => payload?.Url?.Contains(";") == true);
 
             if (payload is null)
             {
@@ -495,9 +476,42 @@ namespace Roslyn.Insertion
             }
 
             // Everything is uploaded to the same drop, so we can take the url of a package and generate the manifest url.
-            var url = new Uri($"{payload.url.Split(';')[0]};{fileName}");
-            return new Component(manifest.info.manifestName, fileName, url, manifest.info.buildVersion);
+            var url = new Uri($"{payload.Url.Split(';')[0]};{fileName}");
+            return new Component(manifest.Info.ManifestName, fileName, url, manifest.Info.BuildVersion);
         }
+
+        private sealed class ManifestInfo
+        {
+            [JsonPropertyName("manifestName")]
+            public string ManifestName { get; set; } = "";
+            [JsonPropertyName("buildVersion")]
+            public string BuildVersion { get; set; } = "";
+        }
+
+        private sealed class ManifestPayload
+        {
+            [JsonPropertyName("url")]
+            public string Url { get; set; } = "";
+        }
+
+        private sealed class ManifestPackage
+        {
+            [JsonPropertyName("payloads")]
+            public ManifestPayload[] Payloads { get; set; } = Array.Empty<ManifestPayload>();
+        }
+
+        private sealed class ComponentManifest
+        {
+            [JsonPropertyName("info")]
+            public ManifestInfo Info { get; set; } = new ManifestInfo();
+            [JsonPropertyName("packages")]
+            public ManifestPackage[] Packages { get; set; } = Array.Empty<ManifestPackage>();
+        }
+
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
 
         internal static async Task<(List<GitCommit> changes, string diffLink)> GetChangesBetweenBuildsAsync(Build fromBuild, Build tobuild, CancellationToken cancellationToken)
         {
@@ -562,48 +576,66 @@ namespace Roslyn.Insertion
             var content = await response.Content.ReadAsStringAsync();
 
             // https://developer.github.com/v3/repos/commits/
-            var data = JsonConvert.DeserializeAnonymousType(content, new
-            {
-                commits = new[]
-                {
-                        new
-                        {
-                            sha = "",
-                            commit = new
-                            {
-                                author = new
-                                {
-                                    name = "",
-                                    email = "",
-                                    date = ""
-                                },
-                                committer = new
-                                {
-                                    name = ""
-                                },
-                                message = ""
-                            },
-                            html_url = ""
-                        }
-                    }
-            });
+            var data = JsonSerializer.Deserialize<GitHubCompareResponse>(content, JsonOptions);
 
-            var result = data.commits
+            var result = data.Commits
                 .Select(d =>
                     new GitCommit()
                     {
-                        Author = d.commit.author.name,
-                        Committer = d.commit.committer.name,
-                        CommitDate = DateTime.Parse(d.commit.author.date),
-                        Message = d.commit.message,
-                        CommitId = d.sha,
-                        RemoteUrl = d.html_url
+                        Author = d.Commit.Author.Name,
+                        Committer = d.Commit.Committer.Name,
+                        CommitDate = DateTime.Parse(d.Commit.Author.Date),
+                        Message = d.Commit.Message,
+                        CommitId = d.Sha,
+                        RemoteUrl = d.HtmlUrl
                     })
                 // show HEAD first, base last
                 .Reverse()
                 .ToList();
 
             return (result, $"//github.com/{repoId}/compare/{fromSHA}...{toSHA}?w=1");
+        }
+
+        private sealed class GitHubCommitAuthor
+        {
+            [JsonPropertyName("name")]
+            public string Name { get; set; } = "";
+            [JsonPropertyName("email")]
+            public string Email { get; set; } = "";
+            [JsonPropertyName("date")]
+            public string Date { get; set; } = "";
+        }
+
+        private sealed class GitHubCommitCommitter
+        {
+            [JsonPropertyName("name")]
+            public string Name { get; set; } = "";
+        }
+
+        private sealed class GitHubCommitDetails
+        {
+            [JsonPropertyName("author")]
+            public GitHubCommitAuthor Author { get; set; } = new GitHubCommitAuthor();
+            [JsonPropertyName("committer")]
+            public GitHubCommitCommitter Committer { get; set; } = new GitHubCommitCommitter();
+            [JsonPropertyName("message")]
+            public string Message { get; set; } = "";
+        }
+
+        private sealed class GitHubCommit
+        {
+            [JsonPropertyName("sha")]
+            public string Sha { get; set; } = "";
+            [JsonPropertyName("commit")]
+            public GitHubCommitDetails Commit { get; set; } = new GitHubCommitDetails();
+            [JsonPropertyName("html_url")]
+            public string HtmlUrl { get; set; } = "";
+        }
+
+        private sealed class GitHubCompareResponse
+        {
+            [JsonPropertyName("commits")]
+            public GitHubCommit[] Commits { get; set; } = Array.Empty<GitHubCommit>();
         }
 
         internal static string AppendChangesToDescription(string prDescription, Build oldBuild, List<GitCommit> changes)

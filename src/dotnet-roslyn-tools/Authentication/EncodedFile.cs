@@ -4,18 +4,17 @@
 
 using System.Text;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 
 namespace Microsoft.RoslynTools.Authentication;
 
 public static class EncodedFile
 {
-    public static int Create(string fileName, JToken jsonContent, ILogger logger)
+    public static int Create(string fileName, string content, ILogger logger)
     {
         try
         {
             Directory.CreateDirectory(Constants.RoslynToolsDirectory);
-            var textBytes = Encoding.UTF8.GetBytes(jsonContent.ToString());
+            var textBytes = Encoding.UTF8.GetBytes(content);
             var encodedContent = Convert.ToBase64String(textBytes);
             File.WriteAllText(Path.Combine(Constants.RoslynToolsDirectory, fileName), encodedContent);
             return Constants.SuccessCode;

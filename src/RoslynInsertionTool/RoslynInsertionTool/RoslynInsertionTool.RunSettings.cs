@@ -7,9 +7,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
-using Newtonsoft.Json;
 
 namespace Roslyn.Insertion
 {
@@ -89,11 +90,7 @@ namespace Roslyn.Insertion
                 {
                     Console.WriteLine($"Reading Tests drop info from: {jsonPath}");
                     var jsonContent = File.ReadAllText(jsonPath);
-                    var testsDropInfo = JsonConvert.DeserializeAnonymousType(jsonContent, new
-                    {
-                        testsRunsettingsUri = "",
-                        stageConfigPath = ""
-                    });
+                    var testsDropInfo = JsonSerializer.Deserialize<TestsDropInfo>(jsonContent, JsonOptions);
 
                     if (testsDropInfo is null)
                     {
@@ -101,19 +98,19 @@ namespace Roslyn.Insertion
                         continue;
                     }
 
-                    if (string.IsNullOrEmpty(testsDropInfo.testsRunsettingsUri))
+                    if (string.IsNullOrEmpty(testsDropInfo.TestsRunsettingsUri))
                     {
                         LogWarning($"'{jsonPath}' is missing 'testsRunsettingsUri' field.");
                         return null;
                     }
 
-                    if (string.IsNullOrEmpty(testsDropInfo.stageConfigPath))
+                    if (string.IsNullOrEmpty(testsDropInfo.StageConfigPath))
                     {
                         LogWarning($"'{jsonPath}' is missing 'stageConfigPath' field.");
                         return null;
                     }
 
-                    return (testsDropInfo.testsRunsettingsUri, testsDropInfo.stageConfigPath);
+                    return (testsDropInfo.TestsRunsettingsUri, testsDropInfo.StageConfigPath);
                 }
                 catch (Exception ex)
                 {
@@ -151,6 +148,13 @@ namespace Roslyn.Insertion
             }
 
             return null;
+        }
+        private sealed class TestsDropInfo
+        {
+            [JsonPropertyName("testsRunsettingsUri")]
+            public string TestsRunsettingsUri { get; set; } = "";
+            [JsonPropertyName("stageConfigPath")]
+            public string StageConfigPath { get; set; } = "";
         }
     }
 }

@@ -8,8 +8,8 @@ using System.IO;
 using System.Linq;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using SignTool.Json;
 
 namespace SignTool
@@ -77,8 +77,7 @@ namespace SignTool
 
         internal static bool TryReadConfigFile(TextWriter output, TextReader configReader, string outputPath, out BatchSignInput batchData)
         {
-            var serializer = new JsonSerializer();
-            var fileJson = (Json.FileJson)serializer.Deserialize(configReader, typeof(Json.FileJson));
+            var fileJson = JsonSerializer.Deserialize<Json.FileJson>(configReader.ReadToEnd(), JsonOptions);
             var map = new Dictionary<string, SignInfo>(StringComparer.OrdinalIgnoreCase);
             var allGood = true;
             foreach (var item in fileJson.SignList)
@@ -122,8 +121,7 @@ namespace SignTool
 
         internal static bool TryReadOrchestrationConfigFile(TextWriter output, TextReader configReader, string outputPath, out BatchSignInput batchData)
         {
-            var serializer = new JsonSerializer();
-            var fileJson = (Json.OrchestratedFileJson)serializer.Deserialize(configReader, typeof(Json.OrchestratedFileJson));
+            var fileJson = JsonSerializer.Deserialize<Json.OrchestratedFileJson>(configReader.ReadToEnd(), JsonOptions);
             var map = new Dictionary<FileSignDataEntry, SignInfo>();
             // For now, a given json file will be assumed to serialize to one place and we'll throw otherwise
             string publishUrl = (from OrchestratedFileSignData entry in fileJson.SignList
@@ -381,9 +379,14 @@ outputConfig: Run tool to produce an orchestration json file with specified name
 
         private static string GetConfigFileKind(string path)
         {
-            JObject configFile = JObject.Parse(File.ReadAllText(path));
-            var kind = configFile["kind"]?.Value<string>();
+            var configFile = JsonNode.Parse(File.ReadAllText(path));
+            var kind = (string?)configFile?["kind"];
             return string.IsNullOrEmpty(kind) ? "default" : kind;
         }
+
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
     }
 }
